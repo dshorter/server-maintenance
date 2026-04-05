@@ -3,7 +3,7 @@
 # Last updated: 2025-10-14
 set -euo pipefail
 
-PROJECT_DIR="/opt/ai-agent-platform"
+PROJECT_DIR="/opt/server-maintenance"
 LOG_FILE="/var/log/agent-platform-health.log"
 ALERT_EMAIL="${ALERT_EMAIL:-}"  # Set via environment or systemd unit
 MAX_RESTART_ATTEMPTS=3

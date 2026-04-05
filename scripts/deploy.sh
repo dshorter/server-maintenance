@@ -4,7 +4,7 @@ echo "?? Deploying AI Agent Platform..."
 echo "?? $(date)"
 
 # Navigate to project directory
-cd /opt/ai-agent-platform || exit 1
+cd /opt/server-maintenance || exit 1
 
 # Pull latest changes
 echo "?? Pulling latest changes..."

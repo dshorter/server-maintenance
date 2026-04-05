@@ -23,7 +23,7 @@ if docker ps | grep -q n8n; then
     fi
 else
     echo -e "${RED}? n8n is down! Attempting restart...${NC}"
-    cd /opt/ai-agent-platform
+    cd /opt/server-maintenance
     docker compose up -d
     
     # Send alert (optional - configure your notification method)

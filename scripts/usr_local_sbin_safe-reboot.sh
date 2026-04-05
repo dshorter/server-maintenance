@@ -3,7 +3,7 @@
 # Last updated: 2025-10-14
 set -euo pipefail
 
-PROJECT_DIR="/opt/ai-agent-platform"
+PROJECT_DIR="/opt/server-maintenance"
 DATA_DIR="/root/n8n-data"
 BACKUP_SCRIPT="$PROJECT_DIR/scripts/backup.sh"
 LOG_FILE="/var/log/safe-reboot.log"

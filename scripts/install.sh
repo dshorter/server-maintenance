@@ -4,6 +4,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SYSTEMD_DIR="$(cd "$SCRIPT_DIR/../systemd" && pwd)"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 log() { 
@@ -31,9 +32,9 @@ validate_files() {
     
     [[ -f "$SCRIPT_DIR/usr_local_sbin_safe-reboot.sh" ]] || missing+=("safe-reboot.sh")
     [[ -f "$SCRIPT_DIR/usr_local_sbin_agent-platform-health.sh" ]] || missing+=("agent-platform-health.sh")
-    [[ -f "$SCRIPT_DIR/etc_systemd_system_ai-agent-platform.service" ]] || missing+=("ai-agent-platform.service")
-    [[ -f "$SCRIPT_DIR/etc_systemd_system_agent-platform-health.service" ]] || missing+=("agent-platform-health.service")
-    [[ -f "$SCRIPT_DIR/etc_systemd_system_agent-platform-health.timer" ]] || missing+=("agent-platform-health.timer")
+    [[ -f "$SYSTEMD_DIR/etc_systemd_system_ai-agent-platform.service" ]] || missing+=("ai-agent-platform.service")
+    [[ -f "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.service" ]] || missing+=("agent-platform-health.service")
+    [[ -f "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.timer" ]] || missing+=("agent-platform-health.timer")
     
     if [[ ${#missing[@]} -gt 0 ]]; then
         echo "ERROR: Missing required files:"
@@ -63,11 +64,11 @@ install_systemd_units() {
     backup_if_exists "/etc/systemd/system/agent-platform-health.service"
     backup_if_exists "/etc/systemd/system/agent-platform-health.timer"
     
-    install -m 0644 "$SCRIPT_DIR/etc_systemd_system_ai-agent-platform.service" \
+    install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_ai-agent-platform.service" \
         /etc/systemd/system/ai-agent-platform.service
-    install -m 0644 "$SCRIPT_DIR/etc_systemd_system_agent-platform-health.service" \
+    install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.service" \
         /etc/systemd/system/agent-platform-health.service
-    install -m 0644 "$SCRIPT_DIR/etc_systemd_system_agent-platform-health.timer" \
+    install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.timer" \
         /etc/systemd/system/agent-platform-health.timer
     
     log "Systemd units installed successfully"
@@ -137,8 +138,8 @@ show_status() {
     echo "  • View logs:       journalctl -u agent-platform-health.service"
     echo ""
     echo "Next steps:"
-    echo "  1. Verify your /opt/ai-agent-platform directory exists"
-    echo "  2. Ensure your backup script is at /opt/ai-agent-platform/scripts/backup.sh"
+    echo "  1. Verify your /opt/server-maintenance directory exists"
+    echo "  2. Ensure your backup script is at /opt/server-maintenance/scripts/backup.sh"
     echo "  3. Test with: sudo safe-reboot"
     echo ""
     echo "════════════════════════════════════════════════════════"
