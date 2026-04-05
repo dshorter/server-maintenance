@@ -1,0 +1,6 @@
+[Unit]
+Description=AI Agent Platform Health Check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/agent-platform-health

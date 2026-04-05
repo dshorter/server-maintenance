@@ -1,0 +1,10 @@
+[Unit]
+Description=Run platform health check 2 minutes after boot and then hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+Unit=agent-platform-health.service
+
+[Install]
+WantedBy=timers.target

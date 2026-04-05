@@ -1,0 +1,12 @@
+﻿.env
+*.log
+.DS_Store
+node_modules/
+n8n-data/
+*.bak
+*.swp
+.idea/
+.vscode/
+*.backup
+*.backup-*
+*-attempt
