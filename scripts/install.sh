@@ -84,6 +84,36 @@ install_systemd_units() {
     log "Systemd units installed successfully"
 }
 
+ensure_swapfile() {
+    # 2GB swap on local disk (NOT the Hetzner volume — network-attached swap
+    # is catastrophic for performance). Idempotent.
+    local swapfile="/swapfile"
+    local size_mb=2048
+
+    if swapon --show | grep -q "^$swapfile "; then
+        log "Swapfile already active at $swapfile — skipping"
+        return 0
+    fi
+
+    if [[ -f "$swapfile" ]]; then
+        log "Swapfile exists but not active — activating"
+        swapon "$swapfile"
+    else
+        log "Creating ${size_mb}MB swapfile at $swapfile..."
+        fallocate -l "${size_mb}M" "$swapfile"
+        chmod 600 "$swapfile"
+        mkswap "$swapfile" >/dev/null
+        swapon "$swapfile"
+    fi
+
+    if ! grep -q "^$swapfile " /etc/fstab; then
+        log "Adding swapfile to /etc/fstab for persistence across reboots"
+        echo "$swapfile none swap sw 0 0" >> /etc/fstab
+    fi
+
+    log "Swap active: $(free -h | awk '/^Swap:/ {print $2}')"
+}
+
 install_docker_hygiene() {
     log "Installing Docker daemon hygiene config..."
 
@@ -199,6 +229,7 @@ main() {
     
     check_root
     validate_files
+    ensure_swapfile
     install_scripts
     install_systemd_units
     install_docker_hygiene

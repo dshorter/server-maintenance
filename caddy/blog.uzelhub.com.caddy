@@ -1,0 +1,23 @@
+# Ghost blog — proxies blog.uzelhub.com to the ghost container on localhost:2368
+#
+# Apply by appending to /etc/caddy/Caddyfile, then:
+#   sudo caddy validate --config /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# DNS prerequisite: blog.uzelhub.com A record -> this server's public IP
+# (Caddy will auto-provision a Let's Encrypt cert on first request.)
+
+blog.uzelhub.com {
+    encode gzip zstd
+
+    # Ghost admin is at /ghost — same origin, no separate block needed
+    reverse_proxy 127.0.0.1:2368
+
+    # Reasonable log rotation for a blog
+    log {
+        output file /var/log/caddy/blog.uzelhub.com.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}

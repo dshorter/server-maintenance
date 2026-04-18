@@ -95,7 +95,7 @@ services:
     image: ngrok/ngrok:alpine
     container_name: ngrok
     restart: unless-stopped
-    command: 
+    command:
       - "http"
       - "web-server:80"
       - "--url=agents-platform.ngrok.io"
@@ -109,6 +109,58 @@ services:
     networks:
       - app-network
 
+  # Ghost blog + MySQL
+  # Caddy on the host proxies blog.uzelhub.com -> 127.0.0.1:2368
+  ghost-mysql:
+    image: mysql:8.0
+    container_name: ghost-mysql
+    restart: unless-stopped
+    # Low-memory tuning for 2GB host (defaults would eat ~500MB)
+    command:
+      - "--default-authentication-plugin=mysql_native_password"
+      - "--innodb-buffer-pool-size=64M"
+      - "--performance-schema=OFF"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${GHOST_MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=ghost_prod
+      - MYSQL_USER=ghost
+      - MYSQL_PASSWORD=${GHOST_DB_PASSWORD}
+    volumes:
+      - ghost-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${GHOST_MYSQL_ROOT_PASSWORD}"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - app-network
+
+  ghost:
+    image: ghost:5-alpine
+    container_name: ghost
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:2368:2368"
+    environment:
+      - NODE_ENV=production
+      - url=https://blog.uzelhub.com
+      - database__client=mysql
+      - database__connection__host=ghost-mysql
+      - database__connection__user=ghost
+      - database__connection__password=${GHOST_DB_PASSWORD}
+      - database__connection__database=ghost_prod
+      # Caddy terminates TLS; Ghost sits behind it on plain HTTP
+      - server__host=0.0.0.0
+      - server__port=2368
+    volumes:
+      - ghost-content:/var/lib/ghost/content
+    depends_on:
+      ghost-mysql:
+        condition: service_healthy
+    networks:
+      - app-network
+
 networks:
   app-network:
     driver: bridge
@@ -117,4 +169,8 @@ volumes:
   postgres-data:
     driver: local
   predictor-data:
+    driver: local
+  ghost-content:
+    driver: local
+  ghost-mysql-data:
     driver: local

@@ -75,6 +75,38 @@ if [ -d "$PREDICTOR_DATA/extractions" ]; then
         -C "$PREDICTOR_DATA" extractions/
 fi
 
+# ── Ghost blog backups ────────────────────────────────────────────
+
+GHOST_BACKUP_DIR="$BACKUP_DIR/ghost"
+
+if docker ps --format '{{.Names}}' | grep -q '^ghost-mysql$'; then
+    mkdir -p "$GHOST_BACKUP_DIR"
+
+    log "Backing up Ghost MySQL..."
+    # Load password from .env if present (same dir pattern as docker-compose)
+    if [ -f "/opt/server-maintenance/.env" ]; then
+        set -a; . /opt/server-maintenance/.env; set +a
+    fi
+
+    if [ -n "${GHOST_MYSQL_ROOT_PASSWORD:-}" ]; then
+        docker exec ghost-mysql mysqldump \
+            -uroot -p"$GHOST_MYSQL_ROOT_PASSWORD" \
+            --single-transaction --quick ghost_prod \
+            2>/dev/null | gzip > "$GHOST_BACKUP_DIR/ghost_db_$TIMESTAMP.sql.gz" || \
+            log "WARNING: ghost mysqldump failed"
+    else
+        log "WARNING: GHOST_MYSQL_ROOT_PASSWORD not set — skipping ghost db dump"
+    fi
+
+    log "Backing up Ghost content volume..."
+    docker run --rm \
+        -v ghost-content:/src:ro \
+        -v "$GHOST_BACKUP_DIR":/dst \
+        alpine \
+        tar -czf "/dst/ghost_content_$TIMESTAMP.tar.gz" -C /src . \
+        2>/dev/null || log "WARNING: ghost content backup failed"
+fi
+
 # ── Retention ─────────────────────────────────────────────────────
 
 log "Cleaning up backups older than 14 days..."
