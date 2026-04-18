@@ -1,0 +1,14 @@
+{
+  "data-root": "/mnt/HC_Volume_103575430/docker",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "50m",
+    "max-file": "3"
+  },
+  "builder": {
+    "gc": {
+      "enabled": true,
+      "defaultKeepStorage": "10GB"
+    }
+  }
+}

@@ -6,7 +6,11 @@
 
 - [ ] **Add `claude` user to docker group** — Requires root: `sudo usermod -aG docker claude` + session restart. Needed so Claude Code can run `docker system df` and other Docker commands directly.
 
-- [ ] **Clean up full Docker volume** — `/mnt/HC_Volume_103575430` is 100% full (70G). Docker data-root lives there. As root, run `docker system df -v` to identify what's consuming space. Likely candidates: old images, build cache, container logs. Critical — full disk can crash containers.
+- [x] **Clean up full Docker volume** (2026-04-18) — Reclaimed ~61GB:
+  `docker image prune -f` (~10GB) + `docker builder prune -f` (51.36GB of build
+  cache from 3-4 months of rebuilds). Permanent fix landed in this repo:
+  `docker/daemon.json` caps log + builder cache; `docker-prune.timer` runs
+  weekly. See "Docker Disk Hygiene" section in README.
 
 - [ ] **Clean up old predictor data** — In `/opt/predictor_ingest/data/`:
   - 43 `metrics_snapshot_*` dirs (~3M total) — keep latest 3, delete rest

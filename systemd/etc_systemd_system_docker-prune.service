@@ -1,0 +1,10 @@
+[Unit]
+Description=Prune dangling Docker images and build cache
+Documentation=https://github.com/dshorter/server-maintenance
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker image prune -f
+ExecStart=/usr/bin/docker builder prune -f

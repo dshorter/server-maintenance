@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYSTEMD_DIR="$(cd "$SCRIPT_DIR/../systemd" && pwd)"
+DOCKER_DIR="$(cd "$SCRIPT_DIR/../docker" && pwd)"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 log() { 
@@ -35,7 +36,10 @@ validate_files() {
     [[ -f "$SYSTEMD_DIR/etc_systemd_system_ai-agent-platform.service" ]] || missing+=("ai-agent-platform.service")
     [[ -f "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.service" ]] || missing+=("agent-platform-health.service")
     [[ -f "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.timer" ]] || missing+=("agent-platform-health.timer")
-    
+    [[ -f "$SYSTEMD_DIR/etc_systemd_system_docker-prune.service" ]] || missing+=("docker-prune.service")
+    [[ -f "$SYSTEMD_DIR/etc_systemd_system_docker-prune.timer" ]] || missing+=("docker-prune.timer")
+    [[ -f "$DOCKER_DIR/daemon.json" ]] || missing+=("docker/daemon.json")
+
     if [[ ${#missing[@]} -gt 0 ]]; then
         echo "ERROR: Missing required files:"
         printf '  - %s\n' "${missing[@]}"
@@ -63,15 +67,46 @@ install_systemd_units() {
     backup_if_exists "/etc/systemd/system/ai-agent-platform.service"
     backup_if_exists "/etc/systemd/system/agent-platform-health.service"
     backup_if_exists "/etc/systemd/system/agent-platform-health.timer"
-    
+    backup_if_exists "/etc/systemd/system/docker-prune.service"
+    backup_if_exists "/etc/systemd/system/docker-prune.timer"
+
     install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_ai-agent-platform.service" \
         /etc/systemd/system/ai-agent-platform.service
     install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.service" \
         /etc/systemd/system/agent-platform-health.service
     install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.timer" \
         /etc/systemd/system/agent-platform-health.timer
-    
+    install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_docker-prune.service" \
+        /etc/systemd/system/docker-prune.service
+    install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_docker-prune.timer" \
+        /etc/systemd/system/docker-prune.timer
+
     log "Systemd units installed successfully"
+}
+
+install_docker_hygiene() {
+    log "Installing Docker daemon hygiene config..."
+
+    local target="/etc/docker/daemon.json"
+    local source="$DOCKER_DIR/daemon.json"
+    local restart_needed=0
+
+    mkdir -p /etc/docker
+
+    if [[ -f "$target" ]] && cmp -s "$source" "$target"; then
+        log "daemon.json unchanged — skipping restart"
+    else
+        backup_if_exists "$target"
+        install -m 0644 "$source" "$target"
+        restart_needed=1
+        log "daemon.json installed"
+    fi
+
+    if [[ "$restart_needed" -eq 1 ]]; then
+        log "Restarting docker.service to apply daemon.json..."
+        systemctl restart docker.service
+        log "docker.service restarted"
+    fi
 }
 
 configure_systemd() {
@@ -83,10 +118,12 @@ configure_systemd() {
     systemctl enable ai-agent-platform.service
     systemctl enable agent-platform-health.service
     systemctl enable agent-platform-health.timer
-    
-    # Start the timer (which will start the health check)
+    systemctl enable docker-prune.timer
+
+    # Start the timers (health check + weekly prune)
     systemctl start agent-platform-health.timer
-    
+    systemctl start docker-prune.timer
+
     log "Systemd configuration complete"
 }
 
@@ -112,7 +149,15 @@ verify_installation() {
         echo "ERROR: agent-platform-health.timer is not active"
         exit 1
     }
-    
+    systemctl is-active docker-prune.timer >/dev/null || {
+        echo "ERROR: docker-prune.timer is not active"
+        exit 1
+    }
+    [[ -f /etc/docker/daemon.json ]] || {
+        echo "ERROR: /etc/docker/daemon.json not installed"
+        exit 1
+    }
+
     log "✓ All checks passed"
 }
 
@@ -130,6 +175,10 @@ show_status() {
     echo "  • ai-agent-platform.service (enabled)"
     echo "  • agent-platform-health.service (enabled)"
     echo "  • agent-platform-health.timer (enabled and running)"
+    echo "  • docker-prune.timer (enabled and running, weekly Sun 03:00)"
+    echo ""
+    echo "Docker daemon config:"
+    echo "  • /etc/docker/daemon.json (log rotation + builder GC)"
     echo ""
     echo "Usage:"
     echo "  • Safe reboot:     sudo safe-reboot"
@@ -152,6 +201,7 @@ main() {
     validate_files
     install_scripts
     install_systemd_units
+    install_docker_hygiene
     configure_systemd
     verify_installation
     show_status
