@@ -11,9 +11,12 @@
 #   sudo rclone lsd b2:
 #   sudo rclone touch b2:<bucket>/_writetest && sudo rclone delete b2:<bucket>/_writetest
 #
-# The application key should be scoped to ONE bucket with writeFiles only —
-# no listAllBucketNames, no deleteFiles. That way a compromised VPS cannot
-# enumerate or wipe prior backups.
+# The application key must be scoped to ONE bucket, with read+write+DELETE:
+# backup.sh prunes old bundles itself (rclone delete --min-age), so
+# deleteFiles is required — the wipe-resistance comes from the bucket's
+# Object Lock on recent bundles, not from denying delete. What the key must
+# NOT have: account-wide scope, writeKeys, deleteBuckets (see
+# /opt/_host/README.md §Credentials, corrected 2026-07-03).
 
 [b2]
 type = b2
