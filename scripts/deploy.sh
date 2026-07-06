@@ -1,34 +1,26 @@
 #!/bin/bash
+# Deploy script — called by GitHub Actions after push to main.
+#
+# SCOPE (2026-07-05): this repo owns ONLY ghost + ghost-mysql. The compose
+# file also defines the ai-agent-platform services as legacy — a bare
+# `docker compose down` / `up -d` here would spin up duplicates and fight
+# for :80/:5432/:5678 (see README "What this repo does NOT own"). The old
+# version of this script did exactly that on every push. Deploy is now:
+# pull the repo, ensure the ghost pair is up. Installed system files
+# (/usr/local/sbin, /etc/systemd) are NOT auto-synced — apply those
+# deliberately, by hand.
 
-echo "?? Deploying AI Agent Platform..."
-echo "?? $(date)"
+set -euo pipefail
 
-# Navigate to project directory
 cd /opt/server-maintenance || exit 1
 
-# Pull latest changes
-echo "?? Pulling latest changes..."
+echo "Pulling latest changes..."
 git pull origin main
 
-# Stop existing containers
-echo "?? Stopping containers..."
-docker compose down
+echo "Ensuring ghost stack is up (ghost-mysql ghost ONLY)..."
+docker compose up -d ghost-mysql ghost
 
-# Pull latest images
-echo "?? Updating Docker images..."
-docker compose pull
+echo "Status:"
+docker compose ps ghost-mysql ghost
 
-# Start containers
-echo "?? Starting containers..."
-docker compose up -d
-
-# Wait for health check
-echo "? Waiting for services to be healthy..."
-sleep 10
-
-# Show status
-echo "?? Current status:"
-docker compose ps
-
-echo "? Deployment complete!"
-echo "?? View logs with: docker compose logs -f"
+echo "Deployment complete."

@@ -1,0 +1,26 @@
+[Unit]
+Description=Server Maintenance Stack (ghost blog via docker compose)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/server-maintenance
+# IMPORTANT: this compose file defines the full stack (postgres, n8n,
+# predictor, ngrok, web-server, ghost-mysql, ghost) but only ghost+ghost-mysql
+# are actually owned here — the rest run from /opt/ai-agent-platform/.
+# Bringing them all up would fight for :80, :5432, :5678. Always target
+# the ghost services explicitly.
+ExecStart=/usr/bin/docker compose up -d ghost-mysql ghost
+ExecStop=/usr/bin/docker compose stop ghost ghost-mysql
+TimeoutStartSec=0
+# Same self-heal pattern as uzella-proxy.service: at boot, docker can race
+# compose ("container name already in use" while old containers load) —
+# seen 2026-06-02, left the blog down for a week. Retry instead of giving up.
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

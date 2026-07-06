@@ -1,0 +1,21 @@
+[Unit]
+Description=Daily local + off-site backup
+Documentation=file:///opt/server-maintenance/scripts/backup.sh
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+# Pages the operator (shared Telegram channel) if the unit itself fails.
+# Warning-level problems inside a successful run are paged by backup.sh directly.
+OnFailure=notify-telegram@%n.service
+
+[Service]
+Type=oneshot
+# Off-site target (rclone.conf lives at /root/.config/rclone/rclone.conf).
+Environment=BACKUP_OFFSITE_REMOTE=b2:uzelhub-backups 
+ExecStart=/opt/server-maintenance/scripts/backup.sh
+StandardOutput=journal
+StandardError=journal
+# Don't take the whole box down if a backup hits OOM
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

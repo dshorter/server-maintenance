@@ -1,0 +1,22 @@
+# rclone config for off-site backup to Backblaze B2.
+#
+# Install:
+#   sudo install -d -m 700 /root/.config/rclone
+#   sudo cp /opt/server-maintenance/scripts/rclone.conf.example \
+#           /root/.config/rclone/rclone.conf
+#   sudo chmod 600 /root/.config/rclone/rclone.conf
+#   # then fill in account/key below
+#
+# Verify after editing:
+#   sudo rclone lsd b2:
+#   sudo rclone touch b2:<bucket>/_writetest && sudo rclone delete b2:<bucket>/_writetest
+#
+# The application key should be scoped to ONE bucket with writeFiles only —
+# no listAllBucketNames, no deleteFiles. That way a compromised VPS cannot
+# enumerate or wipe prior backups.
+
+[b2]
+type = b2
+account = REPLACE_WITH_KEY_ID
+key     = REPLACE_WITH_APPLICATION_KEY
+hard_delete = true

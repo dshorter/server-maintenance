@@ -146,22 +146,9 @@ wait_for_predictor_pipeline() {
     return 1
 }
 
-backup_predictor_db() {
-    log "Backing up predictor SQLite database..."
-
-    if ! docker ps --filter "name=predictor-pipeline" --filter "status=running" | grep -q predictor-pipeline; then
-        log "WARNING: predictor-pipeline container not running, skipping backup"
-        return 0
-    fi
-
-    local backup_name="predictor_prereboot_$(date +'%Y%m%d_%H%M%S').db"
-
-    if docker exec predictor-pipeline sqlite3 /app/data/db/predictor.db ".backup /app/data/db/backups/${backup_name}" 2>/dev/null; then
-        log "✓ Predictor database backed up: ${backup_name}"
-    else
-        log "WARNING: Predictor database backup failed (non-fatal, continuing reboot)"
-    fi
-}
+# backup_predictor_db removed 2026-07-02: it targeted a predictor-pipeline
+# container that no longer runs (warned on every reboot), and backup.sh now
+# snapshots the predictor SQLite DBs directly from /opt/predictor_ingest.
 
 graceful_stop() {
     log "Beginning graceful shutdown..."
@@ -170,7 +157,6 @@ graceful_stop() {
     check_n8n_health || log "WARNING: n8n health check failed before shutdown"
     wait_for_executions
     wait_for_predictor_pipeline
-    backup_predictor_db
     run_backup
 
     log "Stopping all containers..."

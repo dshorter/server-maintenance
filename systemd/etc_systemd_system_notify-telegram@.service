@@ -1,0 +1,8 @@
+[Unit]
+Description=Telegram failure notification for %i
+# Attach to any unit with: OnFailure=notify-telegram@%n.service
+# Sends via the shared operator channel; see sysadmin-agent-design.md §Notifications.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/notify-telegram SYSTEM "unit %i FAILED on %H — check: journalctl -u %i"
