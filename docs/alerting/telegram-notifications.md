@@ -33,11 +33,29 @@ echo "message" | notify-telegram <agent-name>
 |---|---|
 | `/usr/local/sbin/notify-telegram` | `scripts/usr_local_sbin_notify-telegram.sh` |
 | `/etc/systemd/system/notify-telegram@.service` | `systemd/etc_systemd_system_notify-telegram@.service` |
-| `/etc/default/notify-telegram` | *not in repo* — contains the bot token (root:root, 600) |
-| `/var/lib/notify-telegram/` | state: daily counter files, auto-cleaned after 7 days |
+| `/etc/default/notify-telegram` | *not in repo* — contains the bot token (**root:claude, 640**; see below) |
+| `/var/lib/notify-telegram/` | state: daily counter files, auto-cleaned after 7 days (**root:claude, 2770**; see below) |
 
 The config file *is* captured by `backup.sh` into the system backup staging
 (mode 600), so it survives a rebuild.
+
+### Permissions — the claude-run senders (deliberate, 2026-07)
+
+Not everything that pages is root: **uzella-proxy runs as `claude`** and calls
+this helper for contact-form submissions and ask-endpoint budget caps. Two
+things make that work, and both must survive a rebuild:
+
+- `/etc/default/notify-telegram` is **root:claude, 640** (not root:root 600):
+  the claude group must read the token to send. Trade-off accepted — any
+  claude-user process can read the bot token; it's a send-only pager bot.
+- `/var/lib/notify-telegram` is **root:claude, 2770** (setgid, group-writable):
+  root units and the claude-run proxy append to the *same* daily count file,
+  so they share one cap. Before 2026-07-11 the dir was root-only and every
+  proxy-sent page silently bypassed the cap. The script normalizes these
+  perms on every root-invoked run; count files are opened up to 660.
+- Services sandboxed with `ProtectSystem=strict` that exec this helper also
+  need `ReadWritePaths=/var/lib/notify-telegram` in their unit (uzella-proxy
+  has it), or /var is mounted read-only and their sends go uncounted.
 
 ## Config & token rotation
 
@@ -58,6 +76,8 @@ bot token rotates, update both files.**
   warned. This path matters most: the unit exits 0 on warnings, so
   `OnFailure=` alone would miss a broken off-site upload — exactly the
   failure mode that went silent for three weeks in June 2026.
+- **`uzella-proxy`** (runs as claude) — `[CONTACT]` on each contact-form
+  submission; `[ASK]` once when the ask endpoint's daily budget cap trips.
 - **Any other unit:** add `OnFailure=notify-telegram@%n.service` under
   `[Unit]` — nothing else needed.
 - **Any script/agent:** call the helper with its own agent name.
