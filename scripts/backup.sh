@@ -3,6 +3,11 @@
 # Backs up: n8n data, system config, predictor databases & extractions
 set -euo pipefail
 
+# Everything this script creates is root-only. Root's default umask (022) made
+# the pg_dumpall / ghost dumps 644 — combined with staging inside the n8n
+# mount, that left full DB dumps container-readable until 2026-07-11.
+umask 077
+
 # Staging lives OUTSIDE /root/n8n-data on purpose (moved 2026-07-02): that
 # dir is mounted into the n8n container as /data/backups, which let a
 # compromised n8n read every dump and delete all local backups. Root-only 700.
@@ -268,10 +273,18 @@ if [ -n "$OFFSITE_REMOTE" ] && command -v rclone >/dev/null 2>&1; then
     # dir (multi-GB) from the bundle — which also dropped every DB dump:
     # bundles uploaded before 2026-06-10 contain NO dumps despite the
     # restore docs saying otherwise. Hardlink just *this run's* artifacts
-    # into a sibling dir (not named "backups") so they ride along.
-    OFFSITE_DUMPS_DIR="/root/n8n-data/offsite-dumps-$TIMESTAMP"
-    rm -rf /root/n8n-data/offsite-dumps-*    # stale dirs from crashed runs
+    # into a dir (not named "backups") that rides along in the tar.
+    #
+    # Staged under /root, NOT /root/n8n-data: all of n8n-data is mounted into
+    # the n8n container (/home/node/.n8n), so dumps staged there were readable
+    # from inside the container — the exact exposure the 2026-07-02 staging
+    # move was meant to close. /var/backups won't work either: tar's
+    # --exclude='backups' matches that path component.
+    OFFSITE_DUMPS_DIR="/root/offsite-dumps-$TIMESTAMP"
+    # stale dirs from crashed runs (old n8n-data location too, transitional)
+    rm -rf /root/offsite-dumps-* /root/n8n-data/offsite-dumps-*
     mkdir -p "$OFFSITE_DUMPS_DIR"
+    chmod 700 "$OFFSITE_DUMPS_DIR"
     find "$BACKUP_DIR" -type f -name "*${TIMESTAMP}*" \
         -exec ln {} "$OFFSITE_DUMPS_DIR/" \; 2>/dev/null || \
         warn "could not stage this run's dumps for off-site"
@@ -295,6 +308,7 @@ if [ -n "$OFFSITE_REMOTE" ] && command -v rclone >/dev/null 2>&1; then
             opt/ai-agent-platform \
             opt/rag_pipeline/data \
             root/n8n-data \
+            "root/offsite-dumps-$TIMESTAMP" \
             etc/caddy \
         2>>/tmp/backup-tar-$TIMESTAMP.err \
         | rclone --config /root/.config/rclone/rclone.conf \

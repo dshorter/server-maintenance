@@ -53,11 +53,25 @@ fi
 
 # Daily rate cap shared across ALL agents: NOTIFY_MAX_PER_DAY real messages,
 # then one "storm" notice, then silent drops (still visible in syslog).
+#
+# The state dir is shared by root senders (backup.sh, OnFailure= hooks) AND
+# the claude-run uzella-proxy (contact-form / ask-budget pages). Both must be
+# able to append to the same day's count file, or one sender's messages
+# silently bypass the cap — live behavior until 2026-07-11: the root-only dir
+# made every proxy-sent page uncounted. Root normalizes perms each run
+# (setgid claude group, group-writable); non-root senders use what's there.
+# NOTE: the proxy's unit needs ReadWritePaths=/var/lib/notify-telegram —
+# ProtectSystem=strict otherwise mounts /var read-only for its children.
 mkdir -p "$STATE_DIR" 2>/dev/null || true
+if [ "$(id -u)" = 0 ]; then
+    chgrp claude "$STATE_DIR" 2>/dev/null || true
+    chmod 2770 "$STATE_DIR" 2>/dev/null || true
+fi
 COUNT_FILE="$STATE_DIR/count-$(date +%Y%m%d)"
 find "$STATE_DIR" -name 'count-*' -mtime +7 -delete 2>/dev/null || true
 
 exec 9>>"$COUNT_FILE" 2>/dev/null || true
+chmod 660 "$COUNT_FILE" 2>/dev/null || true   # creator opens it up for the other sender
 flock -w 30 9 2>/dev/null || slog "count-file lock timeout — proceeding uncounted"
 
 COUNT=$(wc -l <"$COUNT_FILE" 2>/dev/null || echo 0)
