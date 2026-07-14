@@ -1,6 +1,9 @@
- #!/usr/bin/env bash
+#!/usr/bin/env bash
 # AI Agent Platform Safe Reboot - Installation Script
 # Created: 2025-10-14
+# 2026-07-14: ai-agent-platform.service retired — no longer installed/enabled.
+#   Boot revival is owned by Docker restart policies + server-maintenance.service.
+#   See docs/deployment/ai-agent-platform-service-findings.md (Resolution).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,7 +36,6 @@ validate_files() {
     
     [[ -f "$SCRIPT_DIR/usr_local_sbin_safe-reboot.sh" ]] || missing+=("safe-reboot.sh")
     [[ -f "$SCRIPT_DIR/usr_local_sbin_agent-platform-health.sh" ]] || missing+=("agent-platform-health.sh")
-    [[ -f "$SYSTEMD_DIR/etc_systemd_system_ai-agent-platform.service" ]] || missing+=("ai-agent-platform.service")
     [[ -f "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.service" ]] || missing+=("agent-platform-health.service")
     [[ -f "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.timer" ]] || missing+=("agent-platform-health.timer")
     [[ -f "$SYSTEMD_DIR/etc_systemd_system_docker-prune.service" ]] || missing+=("docker-prune.service")
@@ -64,14 +66,11 @@ install_scripts() {
 install_systemd_units() {
     log "Installing systemd units..."
     
-    backup_if_exists "/etc/systemd/system/ai-agent-platform.service"
     backup_if_exists "/etc/systemd/system/agent-platform-health.service"
     backup_if_exists "/etc/systemd/system/agent-platform-health.timer"
     backup_if_exists "/etc/systemd/system/docker-prune.service"
     backup_if_exists "/etc/systemd/system/docker-prune.timer"
 
-    install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_ai-agent-platform.service" \
-        /etc/systemd/system/ai-agent-platform.service
     install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.service" \
         /etc/systemd/system/agent-platform-health.service
     install -m 0644 "$SYSTEMD_DIR/etc_systemd_system_agent-platform-health.timer" \
@@ -145,7 +144,6 @@ configure_systemd() {
     systemctl daemon-reload
     
     # Enable services
-    systemctl enable ai-agent-platform.service
     systemctl enable agent-platform-health.service
     systemctl enable agent-platform-health.timer
     systemctl enable docker-prune.timer
@@ -171,10 +169,6 @@ verify_installation() {
     }
     
     # Check systemd units
-    systemctl is-enabled ai-agent-platform.service >/dev/null || {
-        echo "ERROR: ai-agent-platform.service is not enabled"
-        exit 1
-    }
     systemctl is-active agent-platform-health.timer >/dev/null || {
         echo "ERROR: agent-platform-health.timer is not active"
         exit 1
@@ -202,7 +196,6 @@ show_status() {
     echo "  • /usr/local/sbin/agent-platform-health"
     echo ""
     echo "Systemd services:"
-    echo "  • ai-agent-platform.service (enabled)"
     echo "  • agent-platform-health.service (enabled)"
     echo "  • agent-platform-health.timer (enabled and running)"
     echo "  • docker-prune.timer (enabled and running, weekly Sun 03:00)"

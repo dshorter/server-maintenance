@@ -2,23 +2,29 @@
 
 ## Pending
 
-- [ ] **🔴 OFF-SITE BACKUPS DOWN since 2026-06-09 — B2 storage cap exceeded** (found 2026-06-10). Uploads fail with `403 storage_cap_exceeded` (`/tmp/backup-tar-20260610_033348.err`); backup.sh only WARNs by design so the unit still reports success. Root cause: the B2 lifecycle rule never deletes anything — backups use unique filenames so no file is ever "hidden", and a keep-prior-versions-for-7-days rule only deletes *hidden* versions. Bucket sits at 9.4 GiB / 16 objects going back to 2026-05-26. **Operator fix in B2 web UI (on-box key can't delete, by design):** (1) set lifecycle rule on `uzelhub-backups` to `daysFromUploadingToHiding: 7`, `daysFromHidingToDeleting: 1` (hides files 7 days after upload, deletes a day later); (2) check Caps & Alerts — cap is likely 10 GB; (3) optionally delete the pre-Jun-3 files manually to resume uploads immediately. Local backups unaffected.
-
-- [ ] **Restore-verification oddity to check during first drill:** `host-2026060{6,7,8}*.tar.gz` are byte-identical in size (684841818) three days running — plausible for stable content but worth a checksum/extract comparison to rule out a stale-staging bug.
-
-- [ ] **Investigate `ai-agent-platform.service` failed state** — In `failed` state since at least 2026-05-10. Containers run anyway via `unless-stopped`, so it's silently broken. `journalctl -u ai-agent-platform.service -n 100` before next reboot.
-
-- [ ] **Remove `web-server` from `docker-compose.yml`** — Conflicts with caddy on `:80`, stays in `Created` state, not used. Caddy handles all reverse-proxying now.
-
 - [ ] **Decide on retention review window** — Current setup: 14-day local + 7-day off-site B2. Originally wanted to check what pipeline stats are preserved in `predictor_ingest` gist summaries to confirm 14 days is enough. Re-open if that analysis hasn't happened and a real restore-need ever arises.
 
-- [ ] **Add `claude` user to docker group** — Requires root: `sudo usermod -aG docker claude` + session restart. Needed so Claude Code can run `docker system df` and other Docker commands directly.
+## Tracked in the ops calendar (2026-07-11)
 
-- [ ] **Clean up old predictor data** — In `/opt/predictor_ingest/data/`:
-  - 43 `metrics_snapshot_*` dirs (~3M total) — keep latest 3, delete rest
-  - 6 `feed_test_*` dirs (~60K) — safe to delete
+Single source of truth for these moved to `/opt/ai-agent-platform/ops/calendar.ics` (see
+`ops/CALENDAR.md`) — dated, reminder-bearing, and lifecycle-tracked via `calendar-mark`
+instead of a checkbox here. Details preserved in each VTODO's `DESCRIPTION`.
 
-- [ ] **Clean up typo'd dirs at `/opt/` root** — `Clone/`, `repo/`, `your/`, `=p`, `ai=agent-platform/`. Empty/no-content. Deferred from the _host reorg.
+- `investigate-ai-agent-platform-service-failed@ai-agent-platform` — investigation
+  complete (marked COMPLETED early, 2026-07-11); underlying issue resolved
+  2026-07-14: unit retired, health check + safe-reboot rewritten. See the
+  Resolution section of
+  [docs/deployment/ai-agent-platform-service-findings.md](docs/deployment/ai-agent-platform-service-findings.md)
+- `remove-web-server-from-compose@ai-agent-platform` — due 2026-07-18
+- `cleanup-old-predictor-data@ai-agent-platform` — due 2026-07-18
+- `cleanup-opt-stray-dirs@ai-agent-platform` — due 2026-07-18
+- `restore-verification-checksum-check@ai-agent-platform` — due 2026-08-03 (chained via
+  `RELATED-TO` to `backup-restore-drill-monthly@ai-agent-platform`, the next scheduled drill)
+
+## Completed (2026-07-11)
+
+- [x] **Off-site backups (B2 storage cap) resolved** — Was down since 2026-06-09 (`403 storage_cap_exceeded`, root cause: B2 lifecycle rule never hid old unique-named files so nothing aged out). Verified 2026-07-11: no `/tmp/backup-tar-*.err` files since 2026-07-02 17:47, and today's 03:43 `backup.timer` run left no error — uploads have been succeeding since ~2026-07-03. Operator must have applied the B2 lifecycle/cap fix; no code change needed on this end.
+- [x] **`claude` user is in the `docker` group** — Verified 2026-07-11 (`groups claude` → `claude users docker`). Already done; no longer blocking direct `docker system df`-type commands.
 
 ## Completed (2026-06-10)
 

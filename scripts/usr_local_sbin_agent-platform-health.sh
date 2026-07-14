@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
 # AI Agent Platform Health Check Script
-# Last updated: 2025-10-14
+# Last updated: 2026-07-14
 set -euo pipefail
 
 PROJECT_DIR="/opt/server-maintenance"
 LOG_FILE="/var/log/agent-platform-health.log"
 ALERT_EMAIL="${ALERT_EMAIL:-}"  # Set via environment or systemd unit
 MAX_RESTART_ATTEMPTS=3
-
-# Detect docker compose command
-if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
-    COMPOSE="docker compose"
-elif command -v docker-compose >/dev/null 2>&1; then
-    COMPOSE="docker-compose"
-else
-    echo "ERROR: Neither 'docker compose' nor 'docker-compose' found"
-    exit 1
-fi
 
 log() {
     local msg="[$(date +'%Y-%m-%d %H:%M:%S')] $*"
@@ -44,39 +34,54 @@ check_docker_running() {
     return 0
 }
 
-ensure_stack_running() {
-    log "Ensuring Docker Compose stack is running..."
-    
-    cd "$PROJECT_DIR" || {
-        alert "Cannot access project directory: $PROJECT_DIR"
+# Expected always-running containers and who owns them:
+#   n8n, hvac-postgres, ngrok — compose project ai-agent-platform,
+#                               revived at boot by restart=unless-stopped
+#   ghost, ghost-mysql        — compose project server-maintenance,
+#                               started at boot by server-maintenance.service
+# Deliberately absent: web-server (fights caddy for :80, sits in Created —
+# see _host/README.md) and predictor-pipeline (off-by-default compose
+# profile; its data is checked on-disk in check_predictor_health).
+STACK_CONTAINERS=(n8n hvac-postgres ngrok ghost ghost-mysql)
+
+check_stack_containers() {
+    log "Checking expected containers are running..."
+
+    local missing=()
+    local c
+    for c in "${STACK_CONTAINERS[@]}"; do
+        check_container_status "$c" || missing+=("$c")
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        alert "Containers not running/healthy: ${missing[*]}"
         return 1
-    }
-    
-    $COMPOSE up -d || {
-        alert "Failed to start Docker Compose stack"
-        return 1
-    }
-    
-    log "✓ Docker Compose stack is up"
+    fi
+
+    log "✓ All expected containers running"
 }
 
 check_container_status() {
     local container="$1"
-    
-    if ! docker ps --filter "name=$container" --filter "status=running" | grep -q "$container"; then
+
+    # Exact-name inspect: the old `docker ps --filter name=` was a substring
+    # match, so a down 'ghost' hid behind a running 'ghost-mysql'.
+    local running
+    running=$(docker inspect --format '{{.State.Running}}' "$container" 2>/dev/null || echo "false")
+    if [[ "$running" != "true" ]]; then
         log "WARNING: Container '$container' is not running"
         return 1
     fi
-    
+
     # Check if container is healthy (if health check is defined)
     local health
-    health=$(docker inspect --format='{{.State.Health.Status}}' "$container" 2>/dev/null || echo "none")
-    
+    health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || echo "none")
+
     if [[ "$health" == "unhealthy" ]]; then
         log "WARNING: Container '$container' is unhealthy"
         return 1
     fi
-    
+
     return 0
 }
 
@@ -150,29 +155,30 @@ check_disk_space() {
 }
 
 check_predictor_health() {
-    log "Checking predictor pipeline health..."
+    log "Checking predictor data health..."
 
-    # Check container status
-    if ! check_container_status "predictor-pipeline"; then
-        return 1
-    fi
+    # The predictor-pipeline container is behind an off-by-default compose
+    # profile (exited 2026-03, kept failing this probe hourly). The data
+    # lives on the host — check it there instead. Paths match what
+    # backup.sh snapshots.
+    local db_file="/opt/predictor_ingest/data/db/predictor.db"
 
     # Check database file exists and is larger than 1KB
     local db_size
-    db_size=$(docker exec predictor-pipeline stat -c%s /app/data/db/predictor.db 2>/dev/null || echo "0")
+    db_size=$(stat -c%s "$db_file" 2>/dev/null || echo "0")
     if [[ "$db_size" -lt 1024 ]]; then
-        alert "Predictor database missing or too small (${db_size} bytes)"
+        alert "Predictor database missing or too small (${db_size} bytes) at $db_file"
         return 1
     fi
     log "✓ Predictor database OK (${db_size} bytes)"
 
-    # Check for recent backup (within 48 hours)
+    # Check for a recent snapshot in local backup staging (within 48 hours)
     local recent_backup
-    recent_backup=$(docker exec predictor-pipeline find /app/data/db/backups -name "predictor_*.db" -mtime -2 -print -quit 2>/dev/null || echo "")
+    recent_backup=$(find /var/backups/host/predictor -name '*.db' -mtime -2 -print -quit 2>/dev/null || echo "")
     if [[ -z "$recent_backup" ]]; then
-        log "WARNING: No predictor backup found within last 48 hours"
+        log "WARNING: No predictor snapshot in /var/backups/host/predictor within last 48 hours"
     else
-        log "✓ Recent predictor backup found: $(basename "$recent_backup")"
+        log "✓ Recent predictor snapshot found: $(basename "$recent_backup")"
     fi
 
     return 0
@@ -201,10 +207,10 @@ check_recent_errors() {
 }
 
 show_status() {
-    log "Current system status:"
-    
+    log "Current system status (all containers, all compose projects):"
+
     echo "════════════════════════════════════════════════════════" | tee -a "$LOG_FILE"
-    $COMPOSE -f "$PROJECT_DIR/docker-compose.yml" ps | tee -a "$LOG_FILE"
+    docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Label "com.docker.compose.project"}}' | tee -a "$LOG_FILE"
     echo "════════════════════════════════════════════════════════" | tee -a "$LOG_FILE"
 }
 
@@ -246,8 +252,11 @@ run_health_checks() {
     # Docker daemon check
     check_docker_running || failed_checks+=("docker")
     
-    # Ensure stack is up
-    ensure_stack_running || failed_checks+=("stack")
+    # Expected containers up (boot revival is owned by restart policies +
+    # server-maintenance.service — never `compose up` from here: the
+    # server-maintenance compose file defines the whole stack and collides
+    # with the ai-agent-platform project on container names)
+    check_stack_containers || failed_checks+=("stack")
     
     # Component health checks
     check_n8n_health || failed_checks+=("n8n")
