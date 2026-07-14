@@ -1,5 +1,9 @@
 [Unit]
 Description=AI Agent Platform Health Check
+# Pages the operator (shared Telegram channel) when a health run fails.
+# The timer runs hourly; notify-telegram's daily cap + storm-collapse
+# keeps a persistent failure from flooding the channel.
+OnFailure=notify-telegram@%n.service
 
 [Service]
 Type=oneshot

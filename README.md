@@ -40,7 +40,6 @@ server-maintenance/
 │   ├── usr_local_sbin_agent-platform-health.sh  # Health checks + auto-recovery
 │   └── usr_local_sbin_notify-telegram.sh     # Shared-channel Telegram pager ([AGENT]-prefixed)
 ├── systemd/
-│   ├── etc_systemd_system_ai-agent-platform.service     # Boot-time docker compose up (for ai-agent-platform — currently FAILED)
 │   ├── etc_systemd_system_agent-platform-health.service # Health check service
 │   ├── etc_systemd_system_agent-platform-health.timer   # 2 min after boot + hourly
 │   ├── etc_systemd_system_backup.service                # Calls scripts/backup.sh (oneshot)
@@ -228,10 +227,11 @@ journalctl -u docker-prune.service -n 50
   a reboot on 2026-05-27.
 - **`web-server` container stuck in `Created`.** Conflicts with caddy on `:80`.
   Not used. Safe to remove from `docker-compose.yml` when convenient.
-- **`ai-agent-platform.service` in `failed` state.** Containers it manages run
-  anyway via `unless-stopped`, so it's been quietly broken since 2026-05-10.
-  Worth `journalctl -u ai-agent-platform.service -n 100` before the next
-  reboot.
+- **`ai-agent-platform.service` in `failed` state.** Quietly broken since
+  2026-05-10 (containers ran anyway via `unless-stopped`). Resolved 2026-07-14
+  by retiring the unit entirely — nothing depended on it, and a successful run
+  would have collided with the ai-agent-platform compose project. Full history:
+  [docs/deployment/ai-agent-platform-service-findings.md](docs/deployment/ai-agent-platform-service-findings.md).
 
 ---
 

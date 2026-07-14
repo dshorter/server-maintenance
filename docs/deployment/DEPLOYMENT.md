@@ -2,6 +2,16 @@
 **Your Workflow:** Local → GitHub → Auto-deploy to VPS → Run installer  
 **Date:** 2025-10-14
 
+> **⚠ HISTORICAL (superseded as of 2026-07-14).** This describes the original
+> Phase 1 install out of the ai-agent-platform repo. Since then: the safe-reboot
+> bundle moved into *this* repo (`scripts/` + `systemd/`, installed by
+> `scripts/install.sh`); `ai-agent-platform.service` was retired entirely (boot
+> revival is owned by Docker restart policies + `server-maintenance.service`);
+> and the health check + safe-reboot scripts were rewritten. Current state:
+> [ai-agent-platform-service-findings.md](ai-agent-platform-service-findings.md)
+> (Resolution section) and the repo README. Kept for the historical record —
+> don't follow the steps below.
+
 ---
 
 ## 📁 Step 1: Create Local Directory Structure
