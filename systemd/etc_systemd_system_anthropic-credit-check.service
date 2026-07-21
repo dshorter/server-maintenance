@@ -1,0 +1,15 @@
+[Unit]
+Description=Anthropic API credit-exhaustion monitor
+# Pages [BILLING] on the shared operator channel the moment the account's
+# credit balance runs out — so an outage (public ask box + crew + predictor
+# pipeline all fail at once) is an affirmative push, not something a human
+# discovers by hitting the ask box. Built 2026-07-21 after a silent -$0.40.
+# A crash of the check itself pages via OnFailure.
+OnFailure=notify-telegram@%n.service
+
+[Service]
+Type=oneshot
+User=claude
+# No EnvironmentFile / secret wiring: the script resolves ANTHROPIC_API_KEY
+# from the existing uzella-proxy / predictor .env files itself.
+ExecStart=/opt/_host/scripts/check-anthropic-credit

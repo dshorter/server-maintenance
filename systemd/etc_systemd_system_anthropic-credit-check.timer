@@ -1,0 +1,10 @@
+[Unit]
+Description=Probe Anthropic API credit balance every 15 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+Unit=anthropic-credit-check.service
+
+[Install]
+WantedBy=timers.target
