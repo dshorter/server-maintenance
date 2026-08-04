@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # AI Agent Platform Health Check Script
-# Last updated: 2026-07-14
+# Last updated: 2026-08-04
 set -euo pipefail
 
 PROJECT_DIR="/opt/server-maintenance"
@@ -22,8 +22,15 @@ alert() {
     if [[ -n "$ALERT_EMAIL" ]] && command -v mail >/dev/null 2>&1; then
         echo "$msg" | mail -s "Agent Platform Alert" "$ALERT_EMAIL"
     fi
-    
-    # Could also send to Slack, PagerDuty, etc. here
+
+    # Page the operator. Before 2026-08-04 this function only logged (and
+    # emailed, if configured — it never was), so individual check failures
+    # reached Telegram only when the whole script exited nonzero via
+    # OnFailure=. notify-telegram exits 0 on delivery problems by design,
+    # so this can't fail the check that called it.
+    if command -v notify-telegram >/dev/null 2>&1; then
+        notify-telegram HEALTH "$msg"
+    fi
 }
 
 check_docker_running() {
@@ -154,6 +161,27 @@ check_disk_space() {
     return 0
 }
 
+check_memory_pressure() {
+    log "Checking memory pressure..."
+
+    # 2GB box running Ghost+MySQL+n8n+Postgres — RAM is the scarcest resource.
+    # MemAvailable counts reclaimable page cache, so it's the honest number
+    # (free "free" is always near zero here and means nothing).
+    local avail_mb
+    avail_mb=$(awk '/MemAvailable/ {printf "%d", $2/1024}' /proc/meminfo)
+
+    if [[ $avail_mb -lt 200 ]]; then
+        alert "Memory critical: only ${avail_mb}MB available — OOM-kill territory"
+        return 1
+    elif [[ $avail_mb -lt 400 ]]; then
+        log "WARNING: Memory available down to ${avail_mb}MB"
+    else
+        log "✓ Memory OK: ${avail_mb}MB available"
+    fi
+
+    return 0
+}
+
 check_predictor_health() {
     log "Checking predictor data health..."
 
@@ -265,6 +293,7 @@ run_health_checks() {
     
     # System checks
     check_disk_space || failed_checks+=("disk")
+    check_memory_pressure || failed_checks+=("memory")
     check_recent_errors || failed_checks+=("errors")
     
     # Show current status
