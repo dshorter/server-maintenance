@@ -310,6 +310,7 @@ if [ -n "$OFFSITE_REMOTE" ] && command -v rclone >/dev/null 2>&1; then
             root/n8n-data \
             "root/offsite-dumps-$TIMESTAMP" \
             etc/caddy \
+            var/lib/sysadmin-agent \
         2>>/tmp/backup-tar-$TIMESTAMP.err \
         | rclone --config /root/.config/rclone/rclone.conf \
                  rcat "$OFFSITE_PATH" 2>>/tmp/backup-tar-$TIMESTAMP.err
