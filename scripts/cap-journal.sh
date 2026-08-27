@@ -5,17 +5,19 @@
 #   sudo /opt/server-maintenance/scripts/cap-journal.sh --dry-run # show, change nothing
 #
 # Why: /etc/systemd/journald.conf sets no SystemMaxUse, so journald defaults to
-# 10% of the filesystem — ~3.8G on this 38G root. It sits at ~1.9G and climbs.
-# This pins it at 200M and vacuums the excess, recovering ~1.7G.
+# 10% of the filesystem — ~3.8G on this 38G root — and it is already at ~1.9G.
+# This BOUNDS it. The cap defaults to 2G, just above current usage, so nothing
+# is discarded today; it only stops the ceiling from being another 1.9G away.
 #
-# Vacuuming discards OLD journal entries. Anything the sysadmin agent or a
-# post-mortem still needs should be exported first; 200M holds roughly the
-# last few weeks at current volume.
+# The vacuum runs ONLY if usage already exceeds the cap. At CAP=2G with 1.9G on
+# disk that is a no-op and every existing entry survives. Pass a smaller cap
+# (CAP=200M ./cap-journal.sh) to actually reclaim space — that DOES discard the
+# oldest entries, so export them first if anything still needs them.
 
 set -euo pipefail
 
 CONF="/etc/systemd/journald.conf"
-CAP="${CAP:-200M}"
+CAP="${CAP:-2G}"
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
 
@@ -35,8 +37,9 @@ fi
 
 if [[ $DRY_RUN -eq 1 ]]; then
     echo "[dry-run] would append 'SystemMaxUse=$CAP' under [Journal] in $CONF"
-    echo "[dry-run] would run: journalctl --vacuum-size=$CAP"
     echo "[dry-run] would restart systemd-journald"
+    echo "[dry-run] vacuum: journald enforces the cap itself on restart;"
+    echo "[dry-run]         at $CAP with $(journalctl --disk-usage | grep -oE '[0-9.]+[KMGT]' | head -1) on disk, nothing is discarded"
     exit 0
 fi
 
@@ -71,7 +74,11 @@ systemd-analyze cat-config systemd/journald.conf >/dev/null 2>&1 || {
 echo "validated."
 
 systemctl restart systemd-journald
-journalctl --vacuum-size="$CAP"
+
+# journald applies SystemMaxUse itself on restart, trimming only what exceeds
+# the cap. No explicit --vacuum-size call: an explicit vacuum would be the same
+# operation, but calling it makes the script read as if discarding is the point.
+# It is not — bounding growth is.
 
 trap - ERR
 
