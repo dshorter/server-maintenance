@@ -46,8 +46,8 @@ if [ ! -r "$CONF" ]; then
 fi
 # shellcheck disable=SC1090
 . "$CONF"
-: "${NOTIFY_MAX_PER_DAY:=20}"
-: "${NOTIFY_MAX_PER_AGENT:=8}"
+: "${NOTIFY_MAX_PER_DAY:=100}"
+: "${NOTIFY_MAX_PER_AGENT:=15}"
 
 if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
     slog "config incomplete — dropped: [$AGENT] $MSG"
@@ -56,6 +56,15 @@ fi
 
 # Daily rate cap shared across ALL agents: NOTIFY_MAX_PER_DAY real messages,
 # then one "storm" notice, then silent drops (still visible in syslog).
+#
+# 2026-08-29: raised 10 -> 100, and per-agent 15. The old value was doing two
+# jobs -- runaway backstop AND attention manager -- and was bad at the second:
+# it did not stop the hourly disk alert being tuned out, and it silently ate
+# 23 days of predictor failure pages to make room for it. Repetition is now
+# handled at source by the backoff below, so this only has to be the backstop.
+# Normal estate traffic is 10-15 messages a day, so 100 gives real headroom
+# and still trips if something loops. Telegram itself is nowhere near a limit
+# at this volume (bot ceilings are per-second, and it is free).
 #
 # The state dir is shared by root senders (backup.sh, OnFailure= hooks) AND
 # the claude-run uzella-proxy (contact-form / ask-budget pages). Both must be
