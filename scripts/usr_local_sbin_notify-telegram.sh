@@ -16,8 +16,10 @@
 
 set -u
 
-CONF=/etc/default/notify-telegram
-STATE_DIR=/var/lib/notify-telegram
+# Overridable only so the backoff logic can be exercised in a test harness;
+# both default to the real paths in every production call.
+CONF=${NOTIFY_CONF:-/etc/default/notify-telegram}
+STATE_DIR=${NOTIFY_STATE_DIR:-/var/lib/notify-telegram}
 
 slog() { logger -t notify-telegram -- "$*" 2>/dev/null || true; }
 
@@ -44,7 +46,8 @@ if [ ! -r "$CONF" ]; then
 fi
 # shellcheck disable=SC1090
 . "$CONF"
-: "${NOTIFY_MAX_PER_DAY:=10}"
+: "${NOTIFY_MAX_PER_DAY:=20}"
+: "${NOTIFY_MAX_PER_AGENT:=8}"
 
 if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "${TELEGRAM_CHAT_ID:-}" ]; then
     slog "config incomplete — dropped: [$AGENT] $MSG"
@@ -68,11 +71,53 @@ if [ "$(id -u)" = 0 ]; then
     chmod 2770 "$STATE_DIR" 2>/dev/null || true
 fi
 COUNT_FILE="$STATE_DIR/count-$(date +%Y%m%d)"
+SEEN_FILE="$STATE_DIR/seen-$(date +%Y%m%d)"
 find "$STATE_DIR" -name 'count-*' -mtime +7 -delete 2>/dev/null || true
+find "$STATE_DIR" -name 'seen-*'  -mtime +7 -delete 2>/dev/null || true
+
+# ── Repeat backoff ────────────────────────────────────────────────────
+# A stuck condition must not consume the whole estate's daily budget. Live
+# failure 2026-08-22..29: the disk check paged hourly (24/day) against a
+# shared cap of 10, so it exhausted the budget by mid-morning every day and
+# every other agent was suppressed as collateral — the predictor reported
+# "failed: trending" daily for 23 days and none of it was delivered.
+#
+# Fingerprint ignores digits, so "disk at 91%" and "disk at 94%" are the same
+# recurring condition. Send on occurrences 1, 2, 4, 8, 16 ... — the operator
+# still learns it is ongoing, at five pages a day instead of twenty-four.
+FP=$(printf '%s|%s' "$AGENT" "$MSG" \
+     | tr -d '0-9' | tr '[:upper:]' '[:lower:]' \
+     | md5sum 2>/dev/null | cut -c1-12)
+[ -n "$FP" ] || FP="nofp"
+
+exec 8>>"$SEEN_FILE" 2>/dev/null || true
+chmod 660 "$SEEN_FILE" 2>/dev/null || true
+flock -w 5 8 2>/dev/null || true
+printf '%s\n' "$FP" >&8 2>/dev/null || true
+REPEAT=$(grep -c "^$FP\$" "$SEEN_FILE" 2>/dev/null) || REPEAT=1
+[ -n "$REPEAT" ] || REPEAT=1
+
+# Powers of two only.
+if [ "$REPEAT" -gt 0 ] && [ $(( REPEAT & (REPEAT - 1) )) -ne 0 ]; then
+    slog "suppressed (repeat #$REPEAT, backoff): [$AGENT] ${MSG:0:120}"
+    exit 0
+fi
+if [ "$REPEAT" -gt 1 ]; then
+    MSG="$MSG  (repeat #$REPEAT today)"
+fi
 
 exec 9>>"$COUNT_FILE" 2>/dev/null || true
 chmod 660 "$COUNT_FILE" 2>/dev/null || true   # creator opens it up for the other sender
 flock -w 30 9 2>/dev/null || slog "count-file lock timeout — proceeding uncounted"
+
+# Per-agent quota, so one chatty sender cannot censor the others even when
+# its messages are genuinely distinct.
+AGENT_SENT=$(grep -c "\[$AGENT\]" "$COUNT_FILE" 2>/dev/null) || AGENT_SENT=0
+[ -n "$AGENT_SENT" ] || AGENT_SENT=0
+if [ "$AGENT_SENT" -ge "$NOTIFY_MAX_PER_AGENT" ]; then
+    slog "suppressed (agent cap $NOTIFY_MAX_PER_AGENT): [$AGENT] ${MSG:0:120}"
+    exit 0
+fi
 
 COUNT=$(wc -l <"$COUNT_FILE" 2>/dev/null || echo 0)
 if [ "$COUNT" -gt "$NOTIFY_MAX_PER_DAY" ]; then
