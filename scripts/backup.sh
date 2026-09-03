@@ -19,6 +19,11 @@ SYSTEM_BACKUP_DIR="$BACKUP_DIR/system"
 PREDICTOR_BACKUP_DIR="$BACKUP_DIR/predictor"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
+# pigz where available — the predictor snapshots are ~1 GB of SQLite per run
+# and pigz uses every core instead of pinning one for minutes at 03:33.
+# (Named COMPRESSOR, not GZIP: gzip reads GZIP from the environment.)
+if command -v pigz >/dev/null 2>&1; then COMPRESSOR="pigz"; else COMPRESSOR="gzip"; fi
+
 log() { echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
 
 # Warnings are counted so the end of the run can page the operator once via
@@ -61,6 +66,10 @@ if [ -f "/root/n8n-data/database.sqlite" ]; then
     else
         cp /root/n8n-data/database.sqlite "$BACKUP_DIR/database_$TIMESTAMP.sqlite"
     fi
+    # Same reasoning as the predictor snapshots below — raw SQLite in a 14-day
+    # staging window is the one thing here that was not already compressed.
+    "$COMPRESSOR" "$BACKUP_DIR/database_$TIMESTAMP.sqlite" || \
+        warn "could not compress n8n database snapshot — keeping it raw"
 fi
 
 # ── System config backups ─────────────────────────────────────────
@@ -160,14 +169,28 @@ if [ -d "$PREDICTOR_DATA/db" ]; then
     for db in "$PREDICTOR_DATA"/db/*.db; do
         [ -f "$db" ] || continue
         dbname=$(basename "$db" .db)
+        snap="$PREDICTOR_BACKUP_DIR/${dbname}_$TIMESTAMP.db"
         # Use sqlite3 .backup for consistency if available, else cp
         if command -v sqlite3 >/dev/null 2>&1; then
-            sqlite3 "$db" ".backup '$PREDICTOR_BACKUP_DIR/${dbname}_$TIMESTAMP.db'" 2>/dev/null || \
-                cp "$db" "$PREDICTOR_BACKUP_DIR/${dbname}_$TIMESTAMP.db"
+            sqlite3 "$db" ".backup '$snap'" 2>/dev/null || cp "$db" "$snap"
         else
-            cp "$db" "$PREDICTOR_BACKUP_DIR/${dbname}_$TIMESTAMP.db"
+            cp "$db" "$snap"
         fi
-        log "  backed up: $dbname ($(du -sh "$db" | cut -f1))"
+        # Compress it. Every other artifact this script writes is already
+        # gzipped; these snapshots were the only raw ones, and at ~0.7 GB/day
+        # across the 14-day window they had reached 10.2 GB — a third of the
+        # 38G root filesystem (audit 2026-09-03). SQLite gzips ~4.6x, so the
+        # window costs ~2.2 GB instead. Restore is `gunzip -c x.db.gz > x.db`.
+        #
+        # A compression failure is a warning, not a failure: a raw snapshot is
+        # still a good snapshot, and losing the backup to save disk would be
+        # the wrong trade.
+        if "$COMPRESSOR" "$snap"; then
+            log "  backed up: $dbname ($(du -sh "$snap.gz" | cut -f1) gzipped)"
+        else
+            warn "could not compress $snap — keeping it raw"
+            log "  backed up: $dbname ($(du -sh "$snap" | cut -f1) UNCOMPRESSED)"
+        fi
     done
 fi
 

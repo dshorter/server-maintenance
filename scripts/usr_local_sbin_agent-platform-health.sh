@@ -202,7 +202,12 @@ check_predictor_health() {
 
     # Check for a recent snapshot in local backup staging (within 48 hours)
     local recent_backup
-    recent_backup=$(find /var/backups/host/predictor -name '*.db' -mtime -2 -print -quit 2>/dev/null || echo "")
+    # Matches both forms on purpose: backup.sh gzips these as of 2026-09-03,
+    # and a snapshot older than that (or one whose compression warned) is still
+    # a valid snapshot. Globbing only '*.db' here would have reported "no
+    # snapshot in 48 hours" every run from the first compressed backup onward.
+    recent_backup=$(find /var/backups/host/predictor \
+        \( -name '*.db.gz' -o -name '*.db' \) -mtime -2 -print -quit 2>/dev/null || echo "")
     if [[ -z "$recent_backup" ]]; then
         log "WARNING: No predictor snapshot in /var/backups/host/predictor within last 48 hours"
     else

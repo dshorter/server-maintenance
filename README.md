@@ -184,11 +184,14 @@ a transient B2 outage won't block a reboot.
    read access — the on-box key has it).
 2. Extract: `tar xzf host-*.tar.gz -C /restore-staging/`
 3. Inside: `root/n8n-data/offsite-dumps-<TIMESTAMP>/` holds that run's dumps
-   (ghost SQL, `postgres_all_*.sql.gz`, predictor `*.db`, n8n sqlite, system
+   (ghost SQL, `postgres_all_*.sql.gz`, predictor `*.db.gz`, n8n sqlite, system
    configs); `etc/`, `opt/`, `usr/local/sbin/` are verbatim trees ready to
    copy back. (Bundles before 2026-06-10 contain no dumps — exclude bug.)
+   Predictor snapshots are gzipped as of 2026-09-03; bundles older than that
+   carry them as raw `*.db`.
 4. Ghost: `gunzip -c ghost_db_*.sql.gz | docker exec -i ghost-mysql mysql -uroot -p"$ROOT_PW" ghost_prod`
 5. Postgres (both `hvac_demo` and `ai_agent_platform`): `gunzip -c postgres_all_*.sql.gz | docker exec -i hvac-postgres psql -U hvac_user -d postgres` (`pg_dumpall` added 2026-06-10 — the "known gap" note that used to live here is closed).
+6. Predictor: `gunzip -c film_<TIMESTAMP>.db.gz > /opt/predictor_ingest/data/db/film.db` (stop the daily timers first: `systemctl stop predictor-daily@film.timer`).
 
 ---
 
