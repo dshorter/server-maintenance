@@ -3,6 +3,8 @@
 #
 #   sudo /opt/server-maintenance/scripts/cap-journal.sh          # apply
 #   sudo /opt/server-maintenance/scripts/cap-journal.sh --dry-run # show, change nothing
+#   sudo CAP=200M /opt/server-maintenance/scripts/cap-journal.sh --lower  # lower an
+#                                                   # existing cap AND reclaim now
 #
 # Why: /etc/systemd/journald.conf sets no SystemMaxUse, so journald defaults to
 # 10% of the filesystem — ~3.8G on this 38G root — and it is already at ~1.9G.
@@ -19,7 +21,14 @@ set -euo pipefail
 CONF="/etc/systemd/journald.conf"
 CAP="${CAP:-2G}"
 DRY_RUN=0
-[[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
+LOWER=0
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=1 ;;
+        --lower)   LOWER=1 ;;
+        *) echo "unknown argument: $arg" >&2; exit 2 ;;
+    esac
+done
 
 [[ $EUID -eq 0 ]] || { echo "must run as root (sudo)"; exit 1; }
 
@@ -28,11 +37,21 @@ echo "before: $(journalctl --disk-usage)"
 echo "target: SystemMaxUse=$CAP"
 echo
 
+EXISTING=0
 if grep -qE '^\s*SystemMaxUse=' "$CONF"; then
+    EXISTING=1
     echo "SystemMaxUse is already set in $CONF:"
     grep -nE '^\s*SystemMaxUse=' "$CONF"
-    echo "Refusing to overwrite an existing deliberate setting. Edit it by hand."
-    exit 1
+    if [[ $LOWER -eq 0 ]]; then
+        echo
+        echo "Refusing to overwrite an existing deliberate setting."
+        echo "To replace it with CAP=$CAP and reclaim the difference now, re-run with --lower:"
+        echo "  sudo CAP=$CAP $0 --lower"
+        exit 1
+    fi
+    echo "--lower given: replacing it with $CAP and vacuuming down to that size."
+    echo "NOTE: this DISCARDS the oldest journal entries. Export first if you need them."
+    echo
 fi
 
 if [[ $DRY_RUN -eq 1 ]]; then
@@ -57,6 +76,7 @@ trap restore ERR
 
 # Append under the [Journal] section header.
 awk -v cap="$CAP" '
+    /^[[:space:]]*SystemMaxUse=/ { next }
     /^\[Journal\]/ { print; print "SystemMaxUse=" cap; inserted=1; next }
     { print }
     END { if (!inserted) { print "[Journal]"; print "SystemMaxUse=" cap } }
@@ -79,6 +99,13 @@ systemctl restart systemd-journald
 # the cap. No explicit --vacuum-size call: an explicit vacuum would be the same
 # operation, but calling it makes the script read as if discarding is the point.
 # It is not — bounding growth is.
+#
+# --lower is the one case where discarding IS the point: the operator asked to
+# reclaim, so vacuum explicitly rather than waiting for growth to force it.
+if [[ $LOWER -eq 1 ]]; then
+    echo "vacuuming to $CAP ..."
+    journalctl --vacuum-size="$CAP"
+fi
 
 trap - ERR
 
