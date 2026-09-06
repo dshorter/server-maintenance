@@ -6,6 +6,7 @@ Host-level housekeeping for the Hetzner VPS that hosts uzelhub.com and friends.
 
 - **The Ghost blog stack** (`ghost` + `ghost-mysql` containers) serving `blog.uzelhub.com`
 - **`safe-reboot`** — graceful shutdown + reboot orchestration (installed at `/usr/local/sbin/safe-reboot`, source under `scripts/`)
+- **`claude-opt`** — one word from a root shell into a Claude Code session as the `claude` user in `/opt` (installed at `/usr/local/sbin/claude-opt`, source under `scripts/`)
 - **The off-site backup system** — daily `backup.timer` → `backup.service` running `scripts/backup.sh` → Backblaze B2
 - **Docker disk hygiene** — `docker-prune.timer` + `daemon.json` log/cache caps
 - **Host health checks** — `agent-platform-health.timer` + script
@@ -38,7 +39,9 @@ server-maintenance/
 │   ├── install.sh              # One-command installer for safe-reboot system
 │   ├── usr_local_sbin_safe-reboot.sh         # Graceful shutdown + reboot
 │   ├── usr_local_sbin_agent-platform-health.sh  # Health checks + auto-recovery
-│   └── usr_local_sbin_notify-telegram.sh     # Shared-channel Telegram pager ([AGENT]-prefixed)
+│   ├── usr_local_sbin_notify-telegram.sh     # Shared-channel Telegram pager ([AGENT]-prefixed)
+│   ├── usr_local_sbin_claude-opt.sh          # root -> Claude Code as `claude`, cwd /opt
+│   └── install-claude-opt.sh                 # Installer + smoke tests for claude-opt
 ├── systemd/
 │   ├── etc_systemd_system_agent-platform-health.service # Health check service
 │   ├── etc_systemd_system_agent-platform-health.timer   # 2 min after boot + hourly
