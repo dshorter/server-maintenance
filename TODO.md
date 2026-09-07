@@ -2,6 +2,8 @@
 
 ## Pending
 
+- [ ] **Give safe-reboot a working n8n quiesce probe** — Opened 2026-09-07. `wait_for_executions` asked `n8n execute:list --status=running`, a subcommand this n8n does not have (its CLI offers `execute`, `execute-batch`, `list:workflow` and no running-execution query), so the probe had always failed silently and returned success after a 10-second sleep. It now says so loudly every run, but n8n is genuinely not quiesced. Closing it means choosing between an n8n API key for `/api/v1/executions?status=running` and reading n8n's sqlite directly — **a decision, not a detail**: the first adds a credential to the host's plumbing, the second couples this script to n8n's schema. Not urgent while nothing schedules n8n workflows, which is worth confirming before spending anything on it.
+- [ ] **`check-anthropic-credit` has a script and no unit** — `/opt/_host/scripts/check-anthropic-credit` exists (2026-07-21) but no `anthropic-credit-check.service`/`.timer` is installed and nothing references it, so the [BILLING] pager described in the backup docs does not run. Same finding as the 2026-09-05 newsroom handoff's "credit monitor — built, committed twice, units never installed". Install or retire it; a monitor that exists only as a file is worse than none, because it is remembered as coverage.
 - [ ] **Decide on retention review window** — Current setup: 14-day local + 7-day off-site B2. Originally wanted to check what pipeline stats are preserved in `predictor_ingest` gist summaries to confirm 14 days is enough. Re-open if that analysis hasn't happened and a real restore-need ever arises.
 
 ## Tracked in the ops calendar (2026-07-11)

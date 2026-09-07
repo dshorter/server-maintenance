@@ -89,10 +89,18 @@ sudo rclone ls b2:uzelhub-backups/ | tail -5
 # Deploy (pull latest + restart ghost)
 ./scripts/deploy.sh
 
-# Safe reboot (drains n8n executions, backs up local+off-site, stops ghost, reboots)
+# Safe reboot (waits for scheduled agent work, backs up local+off-site, reboots)
+# Containers are NOT stopped — see the script header for why (2026-07-14).
 sudo safe-reboot
 
-# Install/refresh safe-reboot system (systemd units + scripts)
+# Rehearse it: every read-only check, stopping before the backup and the reboot
+sudo safe-reboot --check
+
+# Install/refresh safe-reboot itself (backs up, verifies with --check, rolls back on failure)
+sudo ./scripts/install-safe-reboot.sh --dry-run
+sudo ./scripts/install-safe-reboot.sh
+
+# Install/refresh the wider safe-reboot system (systemd units + scripts)
 sudo ./scripts/install.sh
 
 # Manually bring ghost back if it didn't restart after a reboot
@@ -132,6 +140,33 @@ hold the data; both captured by the daily backup.
 > **Orphan volumes** to be aware of: `ghost-content` (anonymous, not the live
 > one) and `server-maintenance_postgres-data` (left over from when this project
 > ran postgres). Neither is in use. `docker volume rm` when convenient.
+
+---
+
+## What safe-reboot waits for
+
+Reviewed 2026-09-07. The estate's scheduled work lives in systemd timers, not
+in containers, so the quiesce list is a list of **units** and it is data —
+adding a timer means adding a line to `QUIESCE_UNITS` in the script, not
+writing code.
+
+| Waits for | Why |
+|---|---|
+| `predictor-daily@{film,semiconductors,weapons_detection}` | A `make daily` per domain. The film run on 2026-09-07 held the box 06:00–06:53 and spent $1.70. |
+| `predictor-staleness` | Every 6h. |
+| `scout-pass` | The Scout's paid prospecting pass, 05:45. Its forward cursor only advances on persisted jewels, so a kill costs the spend, not the coverage. |
+| `sysadmin-daily`, `director-morning-brief` | Scheduled agent passes. |
+| `backup.service` | 03:30, and `backup.sh` takes no lock of its own — two concurrent runs would share a staging dir and a B2 prune. A real run refuses rather than waits. |
+
+Bounded by `SAFE_REBOOT_AGENT_WAIT` (default 1200s). On timeout it **warns,
+pages and proceeds**: the only thing that aborts a reboot is a failed backup.
+
+**Two things it does not wait for.** n8n executions — the probe it used asks
+for a subcommand this n8n does not have, so it has never worked; it now says
+so on every run rather than printing a checkmark (TODO.md). And any container,
+deliberately, since 2026-07-14 — see the script header.
+
+Rehearse the whole read-only half any time with `sudo safe-reboot --check`.
 
 ---
 
