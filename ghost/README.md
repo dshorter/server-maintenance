@@ -1,3 +1,14 @@
+> **2026-10-04 follow-up — current source:** The operator clarified that this
+> blog records the creation of Predictor Ingest and Predictor Explorer through
+> zero-code AI orchestration. The active header/footer source and manifest are
+> now in `predictor-branding/`. Use
+> `python3 /opt/server-maintenance/scripts/deploy-predictor-branding.py` for
+> preflight and add `--apply` for deployment. It backs up and verifies the
+> affected theme files and six explicitly scoped Ghost settings, with recovery
+> on failure. The first footer files and helper below are retained as history;
+> do not use them to overwrite the current branding. Explicit theme replacement
+> still requires reviewing and preserving these custom partials.
+
 # Uzelhub Ghost footer
 
 Added 2026-10-04 at the operator's request. `source-footer.hbs` replaces Source

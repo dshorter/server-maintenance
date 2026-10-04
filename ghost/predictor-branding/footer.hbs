@@ -1,0 +1,75 @@
+<footer class="gh-footer{{#match @custom.header_and_footer_color "Accent color"}} has-accent-color{{/match}} gh-outer">
+    <style>
+    .uz-blog-purpose { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 48px; padding: 40px 0; border-top: 1px solid var(--color-border); }
+    .uz-blog-purpose h2 { margin: 0 0 16px; font-family: var(--gh-font-heading, var(--font-sans)); font-size: clamp(2.4rem, 2.2vw, 3.2rem); line-height: 1.15; letter-spacing: -.02em; }
+    .uz-blog-purpose p { margin: 0 0 16px; max-width: 64ch; font-size: 1.7rem; line-height: 1.65; }
+    .uz-blog-purpose p:last-child { margin-bottom: 0; }
+    .uz-blog-purpose a { text-decoration: underline; text-underline-offset: .2em; }
+    .uz-blog-purpose a:hover { text-decoration-thickness: 2px; }
+    .uz-blog-purpose a:focus-visible { outline: 2px solid currentColor; outline-offset: 5px; border-radius: 2px; }
+    .uz-blog-links { display: flex; flex-wrap: wrap; gap: 4px 24px; margin-top: 16px; }
+    .uz-blog-links a { display: inline-flex; align-items: center; min-height: 44px; font-size: 1.5rem; }
+    .uz-blog-products { margin: 0 0 20px; flex-direction: column; gap: 0; }
+    .uz-blog-products a { font-size: 1.8rem; font-weight: 650; }
+    .gh-footer .gh-footer-bar { margin-bottom: 56px; }
+    .gh-footer .gh-footer-signup { padding-bottom: 72px; }
+    @media (max-width: 767px) { .uz-blog-purpose { grid-template-columns: minmax(0, 1fr); gap: 28px; padding: 32px 0; } }
+</style>
+    <div class="gh-footer-inner gh-inner">
+
+        <section class="uz-blog-purpose" aria-labelledby="uz-blog-purpose-title">
+            <div>
+                <h2 id="uz-blog-purpose-title">How Predictor Suite was built.</h2>
+                <p>This blog follows the creation of Predictor Ingest and Predictor Explorer through zero-code AI orchestration: Daniel Shorter directs the work, and AI writes the code.</p>
+                <p>The blog is part of the demonstration. AI agents and tools turn that development history into articles and diagrams, with Daniel directing and reviewing what gets published.</p>
+            </div>
+            <div>
+                <nav class="uz-blog-links uz-blog-products" aria-label="Predictor products">
+                    <a href="https://uzelhub.com/products/predictor-suite/">Predictor Suite</a>
+                    <a href="https://uzelhub.com/products/predictor-suite/ingest.html">Predictor Ingest</a>
+                    <a href="https://uzelhub.com/products/predictor-suite/explorer.html">Predictor Explorer</a>
+                </nav>
+                <p>See what the work produced, then explore <a href="https://uzelhub.com/">UzelHub.com</a> for more systems built through the same approach.</p>
+                <nav class="uz-blog-links" aria-label="Explore Uzelhub">
+                    <a href="https://uzelhub.com/products/">Solutions</a>
+                    <a href="https://uzelhub.com/agents/">Agents</a>
+                    <a href="https://uzelhub.com/notes/">Field notes</a>
+                    <a href="https://uzelhub.com/about.html">About</a>
+                    <a href="https://uzelhub.com/contact.html">Contact</a>
+                    <a href="https://blog.uzelhub.com/rss/">RSS feed</a>
+                </nav>
+            </div>
+        </section>
+
+        <div class="gh-footer-bar">
+            <span class="gh-footer-logo is-title">
+                {{#if @site.logo}}
+                    <img src="{{@site.logo}}" alt="{{@site.title}}">
+                {{else}}
+                    {{@site.title}}
+                {{/if}}
+            </span>
+            <nav class="gh-footer-menu">
+                {{navigation type="secondary"}}
+            </nav>
+            <div class="gh-footer-copyright">
+                Powered by <a href="https://ghost.org/" target="_blank" rel="noopener">Ghost</a>
+            </div>
+        </div>
+
+        {{#if @site.members_enabled}}
+            {{#unless @member}}
+                <section class="gh-footer-signup">
+                    <h2 class="gh-footer-signup-header is-title">
+                        {{#if @custom.signup_heading}}{{@custom.signup_heading}}{{else}}Follow the Predictor build{{/if}}
+                    </h2>
+                    <p class="gh-footer-signup-subhead is-body">
+                        {{#if @custom.signup_subheading}}{{@custom.signup_subheading}}{{else}}New articles on building Predictor Ingest and Predictor Explorer with AI.{{/if}}
+                    </p>
+                    {{> "email-subscription" email_field_id="footer-email"}}
+                </section>
+            {{/unless}}
+        {{/if}}
+
+    </div>
+</footer>

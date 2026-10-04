@@ -1,0 +1,30 @@
+{
+  "before": {
+    "header.hbs": "d733e689764509c8be52627bda285c04020306dc3943af0de1297a866fbfb911",
+    "header-content.hbs": "829dd0b30528abe6e978dd18177155149da36bba4a9c51768aac3297937896c7",
+    "footer.hbs": "73388c0f2229ab8a2918d9eb1f6c9f936cf3a30703929c324ecb033a627e087d"
+  },
+  "new_files": [
+    "predictor-intro.hbs"
+  ],
+  "settings": {
+    "title": "Predictor Suite | Uzelhub",
+    "description": "How Daniel Shorter built Predictor Ingest and Predictor Explorer through zero-code AI orchestration: human direction, AI-written code.",
+    "meta_title": "Predictor Suite: Zero-Code AI Orchestration | Uzelhub",
+    "meta_description": "How Daniel Shorter built Predictor Ingest and Predictor Explorer through zero-code AI orchestration: human direction, AI-written code."
+  },
+  "theme_settings": {
+    "header_text": "Building Predictor Suite with zero-code AI orchestration.",
+    "background_image": "false"
+  },
+  "expected_settings": {
+    "description": "A buildout log of Uzelhub's predictor \u2014 the pipeline that ingests, the explorer that surfaces. Posts drafted by an AI crew from commit history, reviewed by Dan.",
+    "meta_description": null,
+    "meta_title": null,
+    "title": "uzelhub blog"
+  },
+  "expected_theme_settings": {
+    "header_text": null,
+    "background_image": "true"
+  }
+}
