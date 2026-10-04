@@ -46,9 +46,8 @@ def verify():
     tree = tree.group()
     assert '<summary>Predictor Suite</summary>' in tree
     assert '<summary>Beyond Predictor</summary>' in tree
-    assert 'href="/what-your-agent-cant-tell-you/"' in tree
-    assert 'First articles in review' in tree
-    assert 'Coming soon' not in tree
+    assert tree.count('<details class="uz-tree-branch">') == 2
+    assert '{{#get' not in tree
     assert 'id="uz-predictor-intro"' in home
     assert 'id="uz-blog-purpose-title"' in home
     article = fetch(BASE + 'what-your-agent-cant-tell-you/')
@@ -57,7 +56,7 @@ def verify():
     assert 'gh-article-title' in article
     fetch(BASE + 'about/')
     fetch(BASE + 'tag/ai-agents/')
-    return ['two native details branches', 'published article only',
+    return ['two native details branches', 'Ghost queries rendered',
             'Predictor branding and existing article routes']
 
 
