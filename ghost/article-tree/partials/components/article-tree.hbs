@@ -1,0 +1,94 @@
+{{!-- Two editorial sections. Ghost supplies only published posts. --}}
+<style>
+    .gh-container.has-sidebar:has(.uz-article-tree) .gh-sidebar {
+        grid-column: 1 / span 4;
+        grid-row: 2;
+    }
+    .gh-container.has-sidebar:has(.uz-article-tree) .gh-main {
+        grid-column: 5 / -1;
+        grid-row: 2;
+    }
+    .gh-container.has-sidebar:has(.uz-article-tree) .gh-main::after {
+        right: auto;
+        left: calc(var(--grid-gap) / -2);
+    }
+    .uz-article-tree {
+        font-size: 1.4rem;
+        line-height: 1.45;
+    }
+    .uz-tree-branch {
+        border-bottom: 1px solid var(--color-border);
+    }
+    .uz-tree-branch summary {
+        padding: 14px 2px;
+        cursor: pointer;
+        font-weight: 650;
+    }
+    .uz-tree-branch summary:focus-visible,
+    .uz-tree-branch a:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 3px;
+    }
+    .uz-tree-branch ul {
+        margin: 0 0 16px;
+        padding-left: 22px;
+        list-style: none;
+    }
+    .uz-tree-branch li + li {
+        margin-top: 11px;
+    }
+    .uz-tree-branch a {
+        text-decoration: none;
+    }
+    .uz-tree-branch a:hover {
+        text-decoration: underline;
+    }
+    .uz-tree-empty {
+        opacity: 0.65;
+        font-style: italic;
+    }
+    @media (max-width: 1199px) {
+        .gh-container.has-sidebar:has(.uz-article-tree) .gh-container-inner {
+            display: block;
+            overflow: visible;
+        }
+        .gh-container.has-sidebar:has(.uz-article-tree) .gh-sidebar {
+            display: block;
+            margin-bottom: 30px;
+        }
+        .gh-container.has-sidebar:has(.uz-article-tree) .gh-sidebar-inner {
+            position: static;
+        }
+        .gh-container.has-sidebar:has(.uz-article-tree) .gh-main::after {
+            display: none;
+        }
+    }
+</style>
+
+<nav class="uz-article-tree" aria-label="Browse articles">
+    <h2 class="gh-sidebar-title">Browse articles</h2>
+    {{#get "posts" filter="tags:hash-nav-predictor-suite" limit="100" order="published_at desc" as |predictor|}}
+        <details class="uz-tree-branch">
+            <summary>Predictor Suite</summary>
+            <ul>
+                {{#foreach predictor}}
+                    <li><a href="{{url}}">{{title}}</a></li>
+                {{else}}
+                    <li class="uz-tree-empty">First articles in review</li>
+                {{/foreach}}
+            </ul>
+        </details>
+    {{/get}}
+    {{#get "posts" filter="tags:hash-nav-beyond-predictor" limit="100" order="published_at desc" as |beyond|}}
+        <details class="uz-tree-branch">
+            <summary>Beyond Predictor</summary>
+            <ul>
+                {{#foreach beyond}}
+                    <li><a href="{{url}}">{{title}}</a></li>
+                {{else}}
+                    <li class="uz-tree-empty">More articles to come</li>
+                {{/foreach}}
+            </ul>
+        </details>
+    {{/get}}
+</nav>

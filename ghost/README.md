@@ -1,3 +1,9 @@
+> **2026-10-04 article navigation:** The homepage and paginated post list now
+> use a two-branch browse tree driven by Ghost internal tags and `{{#get}}`.
+> See [article-tree/README.md](article-tree/README.md) for the tag contract,
+> scoped Source templates, and the backed-up deployment helper. Theme upgrades
+> must preserve this partial as well as the Predictor branding below.
+
 > **2026-10-04 follow-up — current source:** The operator clarified that this
 > blog records the creation of Predictor Ingest and Predictor Explorer through
 > zero-code AI orchestration. The active header/footer source and manifest are
