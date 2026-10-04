@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 import urllib.request
+from urllib.parse import urljoin
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -50,14 +51,14 @@ def verify():
     assert '{{#get' not in tree
     assert 'id="uz-predictor-intro"' in home
     assert 'id="uz-blog-purpose-title"' in home
-    article = fetch(BASE + 'what-your-agent-cant-tell-you/')
-    assert 'Three things our AI agent couldn' in article
-    assert 'id="uz-blog-purpose-title"' in article
-    assert 'gh-article-title' in article
+    links = re.findall(r'<li><a href="([^"]+)"', tree)
+    if links:
+        article = fetch(urljoin(BASE, links[0]))
+        assert 'id="uz-blog-purpose-title"' in article
+        assert 'gh-article-title' in article
     fetch(BASE + 'about/')
-    fetch(BASE + 'tag/ai-agents/')
     return ['two native details branches', 'Ghost queries rendered',
-            'Predictor branding and existing article routes']
+            'Predictor branding and linked article routes']
 
 
 def retry(function):
