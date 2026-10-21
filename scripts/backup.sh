@@ -176,6 +176,29 @@ if [ -d "$PREDICTOR_DATA/db" ]; then
         else
             cp "$db" "$snap"
         fi
+        # Unchanged since the last snapshot? Keep one copy, not one a day.
+        # sqlite3 .backup of an unchanged database is byte-identical (checked
+        # 2026-10-20), and a paused domain's database stops changing: film's
+        # was ~268 MB gzipped a day, 14 identical copies across the window.
+        # The previous snapshot is renamed to this run's timestamp and touched,
+        # so the 14-day retention below never ages out the only copy and the
+        # off-site staging (which matches this run's timestamp) still picks
+        # it up. .<db>.last records "<sha256> <file>" of the latest snapshot.
+        lastfile="$PREDICTOR_BACKUP_DIR/.${dbname}.last"
+        newsum=$(sha256sum "$snap" | cut -d' ' -f1)
+        prevsum=""; prevfile=""
+        if [ -f "$lastfile" ]; then
+            read -r prevsum prevfile < "$lastfile" || true
+        fi
+        if [ -n "$prevsum" ] && [ "$prevsum" = "$newsum" ] && [ -n "$prevfile" ] \
+            && [ -f "$PREDICTOR_BACKUP_DIR/$prevfile" ]; then
+            rm -f "$snap"
+            mv "$PREDICTOR_BACKUP_DIR/$prevfile" "$snap.gz"
+            touch "$snap.gz"
+            echo "$newsum $(basename "$snap.gz")" > "$lastfile"
+            log "  unchanged: $dbname (same bytes as $prevfile; one copy kept, renamed to this run)"
+            continue
+        fi
         # Compress it. Every other artifact this script writes is already
         # gzipped; these snapshots were the only raw ones, and at ~0.7 GB/day
         # across the 14-day window they had reached 10.2 GB — a third of the
@@ -186,8 +209,10 @@ if [ -d "$PREDICTOR_DATA/db" ]; then
         # still a good snapshot, and losing the backup to save disk would be
         # the wrong trade.
         if "$COMPRESSOR" "$snap"; then
+            echo "$newsum $(basename "$snap.gz")" > "$lastfile"
             log "  backed up: $dbname ($(du -sh "$snap.gz" | cut -f1) gzipped)"
         else
+            rm -f "$lastfile"
             warn "could not compress $snap — keeping it raw"
             log "  backed up: $dbname ($(du -sh "$snap" | cut -f1) UNCOMPRESSED)"
         fi
@@ -273,6 +298,8 @@ find "$N8N_EXPORT_DIR" -maxdepth 1 -type f -name 'workflows_*.json' -mtime +14 -
 # get off-site coverage too — not just the scheduled systemd unit. Override
 # with BACKUP_OFFSITE_REMOTE= (empty) to force local-only.
 OFFSITE_REMOTE="${BACKUP_OFFSITE_REMOTE-b2:uzelhub-backups}"
+# Off-site bundles kept after a successful upload (operator, 2026-10-20: 4, was 7).
+OFFSITE_KEEP_DAYS="${BACKUP_OFFSITE_KEEP_DAYS:-4}"
 if [ -n "$OFFSITE_REMOTE" ] && command -v rclone >/dev/null 2>&1; then
     HOST_SHORT=$(hostname -s)
     OFFSITE_PATH="$OFFSITE_REMOTE/$HOST_SHORT/$(date +%Y/%m)/host-$TIMESTAMP.tar.gz"
@@ -340,8 +367,29 @@ if [ -n "$OFFSITE_REMOTE" ] && command -v rclone >/dev/null 2>&1; then
     then
         log "Off-site upload complete."
         rm -f /tmp/backup-tar-$TIMESTAMP.err
+
+        # Keep $OFFSITE_KEEP_DAYS days off-site. This prune runs only after a
+        # bundle has landed, so a run of failed uploads can never empty the
+        # bucket; the 8-day prune above stays as the floor and still frees
+        # space before each upload.
+        #
+        # Full effect needs the bucket's Object Lock default retention at
+        # (keep days - 1) or less — 3 days for 4 — set in the B2 console.
+        # Until then bundles 4-7 days old are still locked, this prune can't
+        # remove them, and it says so in the log without paging; a real prune
+        # failure (bad key, network) still pages through the 8-day prune.
+        # A bundle keeps the lock it was uploaded with, so after the console
+        # change the older 7-day locks take up to a week to run out.
+        log "Pruning off-site bundles older than $OFFSITE_KEEP_DAYS days..."
+        rclone --config /root/.config/rclone/rclone.conf --retries 1 \
+            delete --min-age "${OFFSITE_KEEP_DAYS}d" --b2-hard-delete "$OFFSITE_REMOTE/$HOST_SHORT" 2>/dev/null || \
+            log "  some bundles older than $OFFSITE_KEEP_DAYS days are still under Object Lock; the 8-day prune removes them"
     else
-        warn "off-site upload failed — see /tmp/backup-tar-$TIMESTAMP.err"
+        # The error file lives in /tmp and a reboot wipes it (2026-10-20 lost
+        # the only record of 27 failures in 50 days), so put its tail in the
+        # journal too.
+        warn "off-site upload failed — last lines of /tmp/backup-tar-$TIMESTAMP.err follow"
+        tail -n 20 "/tmp/backup-tar-$TIMESTAMP.err" 2>/dev/null | sed 's/^/    /' || true
     fi
     rm -rf "$OFFSITE_DUMPS_DIR"
 elif [ -n "$OFFSITE_REMOTE" ]; then

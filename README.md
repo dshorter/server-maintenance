@@ -175,9 +175,9 @@ Rehearse the whole read-only half any time with `sudo safe-reboot --check`.
 Daily script + timer, runs at ~03:30 local with 15-minute jitter. Also invoked
 by `safe-reboot` before any container shutdown.
 
-**Local staging:** `/var/backups/host/` — root-only 700, 14-day retention via `find -mtime`. *(Moved 2026-07-02 from `/root/n8n-data/backups/`, which is mounted into the n8n container and let it read/delete every dump. n8n workflow exports still land there but are moved into staging immediately.)*
+**Local staging:** `/var/backups/host/` — root-only 700, 14-day retention via `find -mtime`. A predictor database that hasn't changed since its last snapshot keeps one copy, renamed to the latest run (2026-10-20; a paused domain's database otherwise fills the window with identical copies). *(Moved 2026-07-02 from `/root/n8n-data/backups/`, which is mounted into the n8n container and let it read/delete every dump. n8n workflow exports still land there but are moved into staging immediately.)*
 
-**Off-site:** Backblaze B2, bucket `uzelhub-backups`, prefix `<hostname>/<YYYY>/<MM>/host-<TIMESTAMP>.tar.gz`. 7-day retention enforced by `backup.sh` itself (`rclone delete --min-age 7d --b2-hard-delete` before each upload) — the B2 lifecycle rule never applied to these never-hidden unique filenames; see `/opt/_host/README.md` §Backups for the June 2026 storage-cap incident.
+**Off-site:** Backblaze B2, bucket `uzelhub-backups`, prefix `<hostname>/<YYYY>/<MM>/host-<TIMESTAMP>.tar.gz`. 4-day retention (2026-10-20, was 7) enforced by `backup.sh` itself: `rclone delete --min-age 4d --b2-hard-delete` after a successful upload, so failed uploads can't empty the bucket, plus the 8-day prune before each upload as the floor. The bucket's Object Lock default retention (7 days, governance) must be 3 days or less for the 4-day prune to take full effect; that is set in the B2 console. Failed uploads now log the error file's tail to the journal, since /tmp is wiped on reboot. The B2 lifecycle rule never applied to these never-hidden unique filenames; see `/opt/_host/README.md` §Backups for the June 2026 storage-cap incident.
 
 **Alerting:** any warning in a run (including off-site failures) sends one `[BACKUP]` Telegram page; hard unit failure pages via `OnFailure=` — see `docs/alerting/telegram-notifications.md`.
 
