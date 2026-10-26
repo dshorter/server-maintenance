@@ -175,7 +175,7 @@ Rehearse the whole read-only half any time with `sudo safe-reboot --check`.
 Daily script + timer, runs at ~03:30 local with 15-minute jitter. Also invoked
 by `safe-reboot` before any container shutdown.
 
-**Local staging:** `/var/backups/host/` — root-only 700, 14-day retention via `find -mtime`. A predictor database that hasn't changed since its last snapshot keeps one copy, renamed to the latest run (2026-10-20; a paused domain's database otherwise fills the window with identical copies). *(Moved 2026-07-02 from `/root/n8n-data/backups/`, which is mounted into the n8n container and let it read/delete every dump. n8n workflow exports still land there but are moved into staging immediately.)*
+**Local staging:** `/var/backups/host/` — root-only 700, 14-day retention via `find -mtime`. **On the 70 GB volume since 2026-10-26:** the files live in `/mnt/HC_Volume_103575430/backups/host/` and `/var/backups/host` is a symlink to it, so readers keep the old path (`scripts/move-backups-to-volume.sh` made the move; the root disk was at 98%). If the volume isn't mounted, `backup.sh` writes to `/var/backups/host-fallback` on root and warns. A predictor database that hasn't changed since its last snapshot keeps one copy, renamed to the latest run (2026-10-20; a paused domain's database otherwise fills the window with identical copies). *(Moved 2026-07-02 from `/root/n8n-data/backups/`, which is mounted into the n8n container and let it read/delete every dump. n8n workflow exports still land there but are moved into staging immediately.)*
 
 **Off-site:** Backblaze B2, bucket `uzelhub-backups`, prefix `<hostname>/<YYYY>/<MM>/host-<TIMESTAMP>.tar.gz`. 4-day retention (2026-10-20, was 7) enforced by `backup.sh` itself: `rclone delete --min-age 4d --b2-hard-delete` after a successful upload, so failed uploads can't empty the bucket, plus the 8-day prune before each upload as the floor. The bucket's Object Lock default retention (7 days, governance) must be 3 days or less for the 4-day prune to take full effect; that is set in the B2 console. Failed uploads now log the error file's tail to the journal, since /tmp is wiped on reboot. The B2 lifecycle rule never applied to these never-hidden unique filenames; see `/opt/_host/README.md` §Backups for the June 2026 storage-cap incident.
 
@@ -221,9 +221,11 @@ a transient B2 outage won't block a reboot.
 1. Pull the latest `host-*.tar.gz` from B2 (needs an admin-level B2 key with
    read access — the on-box key has it).
 2. Extract: `tar xzf host-*.tar.gz -C /restore-staging/`
-3. Inside: `root/n8n-data/offsite-dumps-<TIMESTAMP>/` holds that run's dumps
-   (ghost SQL, `postgres_all_*.sql.gz`, predictor `*.db.gz`, n8n sqlite, system
-   configs); `etc/`, `opt/`, `usr/local/sbin/` are verbatim trees ready to
+3. Inside: `offsite-dumps-<TIMESTAMP>/` at the top of the bundle holds that run's dumps
+   (bundles before 2026-10-27 have it at `root/offsite-dumps-<TIMESTAMP>/`, and
+   before 2026-07-11 at `root/n8n-data/offsite-dumps-<TIMESTAMP>/`)
+   with ghost SQL, `postgres_all_*.sql.gz`, predictor `*.db.gz`, n8n sqlite and system
+   configs; `etc/`, `opt/`, `usr/local/sbin/` are verbatim trees ready to
    copy back. (Bundles before 2026-06-10 contain no dumps — exclude bug.)
    Predictor snapshots are gzipped as of 2026-09-03; bundles older than that
    carry them as raw `*.db`.

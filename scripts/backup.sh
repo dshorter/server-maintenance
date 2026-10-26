@@ -11,7 +11,31 @@ umask 077
 # Staging lives OUTSIDE /root/n8n-data on purpose (moved 2026-07-02): that
 # dir is mounted into the n8n container as /data/backups, which let a
 # compromised n8n read every dump and delete all local backups. Root-only 700.
+#
+# Since 2026-10-26 it lives on the 70 GB volume instead of the 38 GB root
+# disk, and /var/backups/host is a symlink to it, so every reader keeps its
+# path. move-backups-to-volume.sh made the move; until it has run,
+# /var/backups/host is still a real directory and is used as before. The
+# volume mounts with nofail, so if it is missing the symlink dangles: write
+# to a fallback directory on root and warn, since a backup on the wrong disk
+# beats no backup.
+#
+# STAGE_PARENT holds the off-site staging dir. That step hard-links this
+# run's files, and hard links can't cross filesystems, so it sits on the same
+# disk as BACKUP_DIR.
+BACKUP_VOLUME="/mnt/HC_Volume_103575430"
 BACKUP_DIR="/var/backups/host"
+STAGE_PARENT="/root"
+VOLUME_MISSING=0
+if [ -L "$BACKUP_DIR" ]; then
+    if mountpoint -q "$BACKUP_VOLUME" && [ -d "$BACKUP_VOLUME/backups/host" ]; then
+        BACKUP_DIR="$BACKUP_VOLUME/backups/host"
+        STAGE_PARENT="$BACKUP_VOLUME/offsite-staging"
+    else
+        BACKUP_DIR="/var/backups/host-fallback"
+        VOLUME_MISSING=1
+    fi
+fi
 # n8n can only write exports inside its own mount; each run's export is moved
 # into $BACKUP_DIR immediately after.
 N8N_EXPORT_DIR="/root/n8n-data/backups"
@@ -33,6 +57,8 @@ WARN_COUNT=0
 warn() { WARN_COUNT=$((WARN_COUNT+1)); log "WARNING: $*"; }
 
 log "Starting backup at $TIMESTAMP"
+[ "$VOLUME_MISSING" -eq 0 ] || \
+    warn "backup volume $BACKUP_VOLUME is not mounted — writing to $BACKUP_DIR on the root disk instead"
 
 # Create backup directories
 mkdir -p "$BACKUP_DIR" "$SYSTEM_BACKUP_DIR" "$PREDICTOR_BACKUP_DIR"
@@ -325,14 +351,17 @@ if [ -n "$OFFSITE_REMOTE" ] && command -v rclone >/dev/null 2>&1; then
     # restore docs saying otherwise. Hardlink just *this run's* artifacts
     # into a dir (not named "backups") that rides along in the tar.
     #
-    # Staged under /root, NOT /root/n8n-data: all of n8n-data is mounted into
-    # the n8n container (/home/node/.n8n), so dumps staged there were readable
-    # from inside the container — the exact exposure the 2026-07-02 staging
-    # move was meant to close. /var/backups won't work either: tar's
+    # Staged in $STAGE_PARENT, on BACKUP_DIR's disk: /root while backups live
+    # on root, the volume's offsite-staging dir once they live there. NOT
+    # /root/n8n-data: all of n8n-data is mounted into the n8n container
+    # (/home/node/.n8n), so dumps staged there were readable from inside the
+    # container — the exact exposure the 2026-07-02 staging move was meant to
+    # close. Never under a directory named backups either: tar's
     # --exclude='backups' matches that path component.
-    OFFSITE_DUMPS_DIR="/root/offsite-dumps-$TIMESTAMP"
-    # stale dirs from crashed runs (old n8n-data location too, transitional)
-    rm -rf /root/offsite-dumps-* /root/n8n-data/offsite-dumps-*
+    OFFSITE_DUMPS_DIR="$STAGE_PARENT/offsite-dumps-$TIMESTAMP"
+    # stale dirs from crashed runs, wherever staging has lived
+    rm -rf /root/offsite-dumps-* /root/n8n-data/offsite-dumps-* \
+        "$BACKUP_VOLUME"/offsite-staging/offsite-dumps-*
     mkdir -p "$OFFSITE_DUMPS_DIR"
     chmod 700 "$OFFSITE_DUMPS_DIR"
     find "$BACKUP_DIR" -type f -name "*${TIMESTAMP}*" \
@@ -358,9 +387,9 @@ if [ -n "$OFFSITE_REMOTE" ] && command -v rclone >/dev/null 2>&1; then
             opt/ai-agent-platform \
             opt/rag_pipeline/data \
             root/n8n-data \
-            "root/offsite-dumps-$TIMESTAMP" \
             etc/caddy \
             var/lib/sysadmin-agent \
+        -C "$STAGE_PARENT" "offsite-dumps-$TIMESTAMP" \
         2>>/tmp/backup-tar-$TIMESTAMP.err \
         | rclone --config /root/.config/rclone/rclone.conf \
                  rcat "$OFFSITE_PATH" 2>>/tmp/backup-tar-$TIMESTAMP.err
